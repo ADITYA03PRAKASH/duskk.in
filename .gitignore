@@ -12,6 +12,15 @@
 
 # production
 /build
+/dist
+/.vercel
+
+# sqlite / db
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
 
 # misc
 .DS_Store
@@ -26,6 +35,9 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+.env.local
+.env.production
+.env.development
 !.env.example
 
 # typescript
