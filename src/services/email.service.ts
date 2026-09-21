@@ -5,7 +5,7 @@ const SMTP_HOST = process.env.SMTP_HOST || "smtp-relay.brevo.com";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_USER = process.env.SMTP_USER || "b9ea8f001@smtp-brevo.com";
 const SMTP_PASSWORD = process.env.SMTP_PASSWORD || "";
-const SMTP_FROM = process.env.SMTP_FROM || "DUSKK <Duskk.india@gmail.com>";
+const SMTP_FROM = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
 
 const transporter =
   SMTP_USER && SMTP_PASSWORD && !SMTP_PASSWORD.includes("mock")
@@ -77,7 +77,7 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
         <tr>
           <td align="center" style="padding: 36px 20px; background-color: #0F0F0F; color: #FFFFFF;">
             <h1 style="margin: 0; font-size: 28px; letter-spacing: 4px; font-weight: 400; color: #C5A880;">D U S K K</h1>
-            <p style="margin: 8px 0 0 0; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #E5E5E5;">Modern Luxury Jewellery</p>
+            <p style="margin: 8px 0 0 0; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #E5E5E5;">Thoughtful Gifts. Meaningful Moments.</p>
           </td>
         </tr>
 
@@ -86,12 +86,12 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
           <td style="padding: 36px 32px;">
             <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0;">Thank You for Your Order, ${data.customerName}!</h2>
             <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">
-              Your order <strong style="color: #111111;">#${data.orderNumber}</strong> has been confirmed. Our master jewelers are now carefully preparing and inspecting your items before dispatch.
+              Your order <strong style="color: #111111;">#${data.orderNumber}</strong> has been confirmed. Our team is now carefully preparing and inspecting your items before dispatch.
             </p>
 
             <div style="background-color: #FAF8F5; border-left: 4px solid #C5A880; padding: 14px 18px; margin-bottom: 28px;">
               <p style="margin: 0; font-size: 13px; color: #333333;">
-                <strong>Order Tracking:</strong> You can track your order status anytime at <a href="${process.env.NEXT_PUBLIC_API_URL || "https://duskk.in"}/order/track" style="color: #C5A880; text-decoration: underline;">duskk.in/order/track</a> using your Order Number and Email Address.
+                <strong>Order Tracking:</strong> You can track your order status anytime at <a href="${process.env.NEXT_PUBLIC_API_URL || "https://www.duskk.in"}/order/track" style="color: #C5A880; text-decoration: underline;">duskk.in/order/track</a> using your Order Number and Email Address.
               </p>
             </div>
 
@@ -142,9 +142,9 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
         <!-- Footer -->
         <tr>
           <td align="center" style="padding: 24px; background-color: #F4F4F4; color: #777777; font-size: 12px; line-height: 1.5;">
-            &copy; 2026 DUSKK Jewels. All Rights Reserved. &bull; support@duskk.in &bull; duskk.in<br/>
-            Plot no. 152-153 Sidhatri Enclave, Bhagwati Garden, Uttam Nagar, New Delhi 110059<br/>
-            Concierge: +91 75034 62516 / +91 91426 01081
+            &copy; 2026 DUSKK. All Rights Reserved. &bull; <a href="mailto:duskk.india@gmail.com" style="color: #777777; text-decoration: underline;">duskk.india@gmail.com</a> &bull; <a href="https://www.duskk.in" style="color: #777777; text-decoration: underline;">duskk.in</a><br/>
+            Plot No. 152-153, Sidhatri Enclave, Bhagwati Garden, Uttam Nagar, New Delhi – 110059, India<br/>
+            Helpline: <a href="tel:+917503462516" style="color: #777777; text-decoration: underline;">+91 75034 62516</a>
           </td>
         </tr>
       </table>

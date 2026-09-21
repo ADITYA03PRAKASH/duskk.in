@@ -105,8 +105,8 @@ export function Navbar() {
               <span className="font-serif text-2xl sm:text-3xl tracking-[0.35em] uppercase font-light text-duskk-900 group-hover:text-duskk-gold transition-colors">
                 DUSKK
               </span>
-              <span className="block text-[9px] tracking-[0.45em] uppercase text-duskk-500 font-sans text-center -mt-1">
-                JEWELLERY
+              <span className="block text-[8px] sm:text-[9px] tracking-[0.35em] uppercase text-duskk-500 font-sans text-center -mt-1">
+                CURATED GIFTS
               </span>
             </Link>
           </div>

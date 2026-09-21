@@ -45,8 +45,8 @@ export function Footer() {
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-serif text-white text-base tracking-wide">Demi-Fine Luxury</h4>
-              <p className="text-xs text-duskk-400 mt-0.5">Handcrafted premium luxury jewellery.</p>
+              <h4 className="font-serif text-white text-base tracking-wide">Curated Gifting</h4>
+              <p className="text-xs text-duskk-400 mt-0.5">Thoughtfully selected meaningful gifts.</p>
             </div>
           </div>
 
@@ -55,8 +55,8 @@ export function Footer() {
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-serif text-white text-base tracking-wide">Anti-Tarnish & Safe</h4>
-              <p className="text-xs text-duskk-400 mt-0.5">100% Nickel & Lead-free hypoallergenic.</p>
+              <h4 className="font-serif text-white text-base tracking-wide">Premium Quality</h4>
+              <p className="text-xs text-duskk-400 mt-0.5">Inspected & gift-ready packaging.</p>
             </div>
           </div>
 
@@ -76,7 +76,7 @@ export function Footer() {
             </div>
             <div>
               <h4 className="font-serif text-white text-base tracking-wide">7-Day Easy Returns</h4>
-              <p className="text-xs text-duskk-400 mt-0.5">No-questions-asked return pickup.</p>
+              <p className="text-xs text-duskk-400 mt-0.5">Hassle-free reverse pickup & refunds.</p>
             </div>
           </div>
         </div>
@@ -91,12 +91,12 @@ export function Footer() {
               <span className="font-serif text-3xl tracking-[0.35em] uppercase text-white font-light">
                 DUSKK
               </span>
-              <span className="block text-[10px] tracking-[0.45em] uppercase text-duskk-gold font-sans -mt-1">
-                JEWELLERY &bull; DUSKK.IN
+              <span className="block text-[10px] tracking-[0.4em] uppercase text-duskk-gold font-sans -mt-1">
+                CURATED GIFTS &bull; DUSKK.IN
               </span>
             </Link>
             <p className="text-xs text-duskk-300 leading-relaxed max-w-sm">
-              DUSKK crafts contemporary demi-fine jewelry celebrating modern silhouettes and heritage craftsmanship. Designed for effortless everyday wear and unforgettable evenings.
+              Thoughtful Gifts. Meaningful Moments. DUSKK brings together curated lifestyle gifts and products to make every occasion, celebration, and surprise unforgettable.
             </p>
             <div className="pt-2">
               <span className="text-xs text-duskk-400 block mb-2">Join the Inner Circle for private vaults & 10% off:</span>
@@ -222,14 +222,22 @@ export function Footer() {
                 </Link>
               </li>
               <li className="pt-2 text-[11px] text-duskk-400 leading-relaxed">
-                <span className="text-white block font-medium">Headquarters:</span>
-                Plot no. 152-153 Sidhatri Enclave, Bhagwati Garden, Uttam Nagar, New Delhi 110059
+                <span className="text-white block font-medium">Business Address:</span>
+                Plot No. 152-153,<br />
+                Sidhatri Enclave, Bhagwati Garden,<br />
+                Uttam Nagar, New Delhi – 110059, India
               </li>
               <li className="text-[11px] text-duskk-400">
                 <span className="text-white block font-medium">Helpline:</span>
-                <a href="tel:+917503462516" className="hover:text-duskk-gold">+91 75034 62516</a>
-                <span className="mx-1.5">&bull;</span>
-                <a href="tel:+919142601081" className="hover:text-duskk-gold">+91 91426 01081</a>
+                <a href="tel:+917503462516" className="hover:text-duskk-gold transition text-white font-mono">
+                  +91 75034 62516
+                </a>
+              </li>
+              <li className="text-[11px] text-duskk-400">
+                <span className="text-white block font-medium">Email:</span>
+                <a href="mailto:duskk.india@gmail.com" className="hover:text-duskk-gold transition text-duskk-300">
+                  duskk.india@gmail.com
+                </a>
               </li>
             </ul>
           </div>
@@ -238,7 +246,7 @@ export function Footer() {
 
       {/* Bottom Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between text-xs text-duskk-500">
-        <p>&copy; {new Date().getFullYear()} DUSKK Retail Private Limited. All rights reserved. Registered in India.</p>
+        <p>&copy; {new Date().getFullYear()} DUSKK. All rights reserved.</p>
         <div className="flex items-center space-x-4 mt-4 sm:mt-0">
           <span>Secured with 256-bit SSL &bull; Razorpay Verified Merchant</span>
         </div>
