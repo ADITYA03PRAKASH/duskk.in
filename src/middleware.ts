@@ -10,7 +10,7 @@ const ALLOWED_ORIGINS = [
 
 export function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
-  const host = req.headers.get("host") || "";
+  const host = (req.headers.get("host") || "").toLowerCase();
   const origin = req.headers.get("origin");
   const pathname = url.pathname;
 
@@ -25,7 +25,10 @@ export function middleware(req: NextRequest) {
       if (origin && isAllowedOrigin) {
         response.headers.set("Access-Control-Allow-Origin", corsOrigin);
         response.headers.set("Access-Control-Allow-Credentials", "true");
-        response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+        response.headers.set(
+          "Access-Control-Allow-Methods",
+          "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        );
         response.headers.set(
           "Access-Control-Allow-Headers",
           "Content-Type, Authorization, X-Requested-With, apikey"
@@ -40,7 +43,10 @@ export function middleware(req: NextRequest) {
     if (origin && isAllowedOrigin) {
       response.headers.set("Access-Control-Allow-Origin", corsOrigin);
       response.headers.set("Access-Control-Allow-Credentials", "true");
-      response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+      response.headers.set(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+      );
       response.headers.set(
         "Access-Control-Allow-Headers",
         "Content-Type, Authorization, X-Requested-With, apikey"
@@ -49,7 +55,7 @@ export function middleware(req: NextRequest) {
     return response;
   }
 
-  // Skip static assets and internal next requests
+  // Skip static assets, favicon, images, and next internals
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/static") ||
@@ -61,31 +67,41 @@ export function middleware(req: NextRequest) {
 
   const isAdminSubdomain =
     host.startsWith("admin.") ||
-    host === "admin.duskk.in";
+    host === "admin.duskk.in" ||
+    host.startsWith("admin.localhost");
 
-  // 2. Routing for Admin Subdomain (admin.duskk.in)
+  // 2. Routing for Admin Subdomain (e.g. admin.duskk.in)
   if (isAdminSubdomain) {
-    // If accessing root "/" on admin subdomain, rewrite to "/admin"
-    if (pathname === "/") {
-      url.pathname = "/admin";
-      return NextResponse.rewrite(url);
+    // If user accesses /admin directly on admin subdomain, redirect to clean path
+    if (pathname === "/admin") {
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+    if (pathname.startsWith("/admin/")) {
+      url.pathname = pathname.replace(/^\/admin/, "");
+      return NextResponse.redirect(url);
     }
 
-    // If path doesn't already start with /admin, rewrite it under /admin
-    if (!pathname.startsWith("/admin")) {
-      url.pathname = `/admin${pathname}`;
-      return NextResponse.rewrite(url);
-    }
-
-    return NextResponse.next();
+    // Rewrite clean paths to internal /admin routes
+    // e.g. admin.duskk.in/ -> /admin
+    // e.g. admin.duskk.in/products -> /admin/products
+    // e.g. admin.duskk.in/login -> /admin/login
+    url.pathname = `/admin${pathname === "/" ? "" : pathname}`;
+    return NextResponse.rewrite(url);
   }
 
-  // 3. Routing for Main Storefront (duskk.in)
-  // In production, prevent accessing /admin under duskk.in domain
-  if (process.env.NODE_ENV === "production" && pathname.startsWith("/admin")) {
-    return NextResponse.redirect(new URL("https://admin.duskk.in", req.url));
+  // 3. Routing for Main Storefront (duskk.in / www.duskk.in)
+  // In production, prevent accessing /admin under duskk.in domain and redirect to admin.duskk.in
+  const isProductionHost =
+    host.includes("duskk.in") ||
+    (process.env.NODE_ENV === "production" && !host.includes("localhost"));
+
+  if (isProductionHost && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
+    const subpath = pathname === "/admin" ? "" : pathname.replace(/^\/admin/, "");
+    return NextResponse.redirect(new URL(`https://admin.duskk.in${subpath}`, req.url));
   }
 
+  // Local development (localhost:3000) or standard storefront routes pass through directly
   return NextResponse.next();
 }
 

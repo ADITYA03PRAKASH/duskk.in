@@ -14,7 +14,7 @@ export interface ProductQueryParams {
   page?: number;
 }
 
-export async function withTimeout<T>(promise: PromiseLike<T>, ms: number = 400): Promise<T> {
+export async function withTimeout<T>(promise: PromiseLike<T>, ms: number = 8000): Promise<T> {
   let timer: any;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error("Timeout")), ms);
@@ -320,7 +320,7 @@ export async function getProducts(params: ProductQueryParams) {
             .select("id")
             .eq("slug", category)
             .single(),
-          300
+          8000
         );
         if (catData) {
           query = query.eq("category_id", catData.id);
@@ -358,7 +358,7 @@ export async function getProducts(params: ProductQueryParams) {
     const to = from + limit - 1;
     query = query.range(from, to);
 
-    const { data, count, error } = await withTimeout(query, 400);
+    const { data, count, error } = await withTimeout(query, 8000);
 
     if (error || !data || data.length === 0) {
       let fallbackList = [...FALLBACK_PRODUCTS];
@@ -517,7 +517,7 @@ export async function getProductBySlug(slug: string) {
         .eq("slug", slug)
         .eq("status", "active")
         .single(),
-      400
+      8000
     );
 
     if (error || !product) {
@@ -585,7 +585,7 @@ export async function getCategories() {
         .select("*")
         .eq("is_active", true)
         .order("display_order", { ascending: true }),
-      400
+      8000
     );
 
     if (error || !data || data.length === 0) {
@@ -613,7 +613,7 @@ export async function getCategoryBySlug(slug: string) {
         .eq("slug", slug)
         .eq("is_active", true)
         .single(),
-      400
+      8000
     );
 
     if (!error && data) {
@@ -652,7 +652,7 @@ export async function getBanners() {
         .select("*")
         .eq("is_active", true)
         .order("display_order", { ascending: true }),
-      400
+      8000
     );
 
     if (error || !data || data.length === 0) {

@@ -21,34 +21,36 @@ import {
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   const router = useRouter();
   const [adminUser, setAdminUser] = useState<any | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isLoginPage = pathname === "/admin/login";
+  const isLocalAdmin = pathname.startsWith("/admin");
+  const isLoginPage = pathname === "/admin/login" || pathname === "/login";
+  const loginUrl = isLocalAdmin ? "/admin/login" : "/login";
 
   useEffect(() => {
     if (!isLoginPage) {
       fetch("/api/admin/auth/me")
         .then((res) => {
           if (!res.ok) {
-            router.push("/admin/login");
+            router.push(loginUrl);
           }
           return res.json();
         })
         .then((data) => {
           if (data.success) {
-            setAdminUser(data.data);
+            setAdminUser(data.admin || data.data || { name: "Admin" });
           }
         })
-        .catch(() => router.push("/admin/login"));
+        .catch(() => router.push(loginUrl));
     }
-  }, [pathname, isLoginPage, router]);
+  }, [pathname, isLoginPage, router, loginUrl]);
 
   const handleLogout = async () => {
     await fetch("/api/admin/auth/logout", { method: "POST" });
-    router.push("/admin/login");
+    router.push(loginUrl);
   };
 
   if (isLoginPage) {
@@ -56,14 +58,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const navItems = [
-    { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-    { name: "Products", href: "/admin/products", icon: Package },
-    { name: "Categories", href: "/admin/categories", icon: Layers },
-    { name: "Orders", href: "/admin/orders", icon: ShoppingBag },
-    { name: "Customers (CRM)", href: "/admin/customers", icon: Users },
-    { name: "Inventory", href: "/admin/inventory", icon: Boxes },
-    { name: "Homepage CMS", href: "/admin/cms", icon: FileEdit },
-    { name: "Coupons", href: "/admin/coupons", icon: Tag },
+    { name: "Dashboard", href: isLocalAdmin ? "/admin" : "/", slug: "", icon: LayoutDashboard },
+    { name: "Products", href: isLocalAdmin ? "/admin/products" : "/products", slug: "products", icon: Package },
+    { name: "Categories", href: isLocalAdmin ? "/admin/categories" : "/categories", slug: "categories", icon: Layers },
+    { name: "Orders", href: isLocalAdmin ? "/admin/orders" : "/orders", slug: "orders", icon: ShoppingBag },
+    { name: "Customers (CRM)", href: isLocalAdmin ? "/admin/customers" : "/customers", slug: "customers", icon: Users },
+    { name: "Inventory", href: isLocalAdmin ? "/admin/inventory" : "/inventory", slug: "inventory", icon: Boxes },
+    { name: "Homepage CMS", href: isLocalAdmin ? "/admin/cms" : "/cms", slug: "cms", icon: FileEdit },
+    { name: "Coupons", href: isLocalAdmin ? "/admin/coupons" : "/coupons", slug: "coupons", icon: Tag },
   ];
 
   return (
@@ -93,7 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div>
           {/* Logo */}
           <div className="p-6 border-b border-duskk-800">
-            <Link href="/admin" className="block">
+            <Link href={isLocalAdmin ? "/admin" : "/"} className="block">
               <span className="font-serif text-2xl tracking-[0.3em] uppercase text-duskk-gold font-light">
                 DUSKK
               </span>
@@ -107,7 +109,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <nav className="p-4 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href;
+              const isActive =
+                item.slug === ""
+                  ? pathname === "/" || pathname === "/admin"
+                  : pathname === `/${item.slug}` || pathname === `/admin/${item.slug}`;
+
               return (
                 <Link
                   key={item.name}
@@ -129,9 +135,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Bottom Sidebar Footer */}
         <div className="p-4 border-t border-duskk-800 space-y-3">
-          <Link
-            href="/"
+          <a
+            href="https://duskk.in"
             target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center justify-between text-xs text-duskk-400 hover:text-duskk-gold transition px-2 py-1"
           >
             <span className="flex items-center space-x-2">
@@ -139,14 +146,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <span>View Live Storefront</span>
             </span>
             <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
+          </a>
 
           <div className="bg-duskk-850 p-3 rounded flex items-center justify-between">
             <div className="min-w-0 pr-2">
               <p className="text-xs font-semibold text-white truncate">
                 {adminUser?.name || "Admin"}
               </p>
-              <p className="text-[10px] text-duskk-400 truncate">{adminUser?.email}</p>
+              <p className="text-[10px] text-duskk-400 truncate">{adminUser?.email || "admin@duskk.in"}</p>
             </div>
             <button
               onClick={handleLogout}
@@ -166,7 +173,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center space-x-2 text-xs font-mono text-duskk-500 uppercase">
             <span>DUSKK Retail Admin</span>
             <span>&bull;</span>
-            <span className="text-duskk-800 font-semibold">{pathname.replace("/admin", "Dashboard")}</span>
+            <span className="text-duskk-800 font-semibold">
+              {pathname === "/" || pathname === "/admin"
+                ? "Executive Dashboard"
+                : pathname.replace("/admin/", "").replace("/", "").toUpperCase()}
+            </span>
           </div>
 
           <div className="flex items-center space-x-4">

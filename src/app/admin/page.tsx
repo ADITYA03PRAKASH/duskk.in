@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { formatPrice, formatDate, ORDER_STATUS_LABELS } from "@/lib/utils";
 import {
   IndianRupee,
@@ -16,6 +17,14 @@ import {
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
+  const pathname = usePathname() || "";
+  const isLocalAdmin = pathname.startsWith("/admin");
+  const ordersHref = isLocalAdmin ? "/admin/orders" : "/orders";
+  const inventoryHref = isLocalAdmin ? "/admin/inventory" : "/inventory";
+  const productsHref = isLocalAdmin ? "/admin/products" : "/products";
+  const cmsHref = isLocalAdmin ? "/admin/cms" : "/cms";
+  const couponsHref = isLocalAdmin ? "/admin/coupons" : "/coupons";
+
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -129,7 +138,7 @@ export default function AdminDashboardPage() {
               Recent Customer Orders
             </h2>
             <Link
-              href="/admin/orders"
+              href={ordersHref}
               className="text-xs text-duskk-700 hover:text-duskk-gold font-semibold uppercase tracking-wider flex items-center space-x-1"
             >
               <span>View All Orders</span>
@@ -206,7 +215,7 @@ export default function AdminDashboardPage() {
           <div className="bg-white border border-duskk-200 rounded-lg shadow-sm p-6 space-y-4">
             <h3 className="font-serif text-base font-semibold text-duskk-900 pb-2 border-b border-duskk-100 flex items-center justify-between">
               <span>Low Inventory Watch</span>
-              <Link href="/admin/inventory" className="text-xs text-duskk-gold hover:underline">
+              <Link href={inventoryHref} className="text-xs text-duskk-gold hover:underline">
                 Manage
               </Link>
             </h3>
@@ -237,19 +246,19 @@ export default function AdminDashboardPage() {
             </h3>
             <div className="space-y-2 text-xs">
               <Link
-                href="/admin/products"
+                href={productsHref}
                 className="block p-2 bg-duskk-800 hover:bg-duskk-700 rounded transition"
               >
                 + Add / Manage Products & Media
               </Link>
               <Link
-                href="/admin/cms"
+                href={cmsHref}
                 className="block p-2 bg-duskk-800 hover:bg-duskk-700 rounded transition"
               >
                 &bull; Update Homepage Hero Banners & Announcements
               </Link>
               <Link
-                href="/admin/coupons"
+                href={couponsHref}
                 className="block p-2 bg-duskk-800 hover:bg-duskk-700 rounded transition"
               >
                 % Manage Promotional Coupon Codes

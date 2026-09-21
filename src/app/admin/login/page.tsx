@@ -1,11 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const pathname = usePathname() || "";
+  const isLocalAdmin = pathname.startsWith("/admin");
+  const targetDashboard = isLocalAdmin ? "/admin" : "/";
+
   const [email, setEmail] = useState("admin@duskk.in");
   const [password, setPassword] = useState("DuskkAdmin2026!");
   const [loading, setLoading] = useState(false);
@@ -25,7 +29,7 @@ export default function AdminLoginPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        router.push("/admin");
+        router.push(targetDashboard);
         router.refresh();
       } else {
         setError(data.message || "Invalid administrative credentials");
