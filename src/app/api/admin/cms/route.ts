@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
           is_active: active !== false,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (!error && banner) {
         return NextResponse.json({ success: true, data: banner });

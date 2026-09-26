@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
         .from("categories")
         .select("id")
         .limit(1)
-        .single();
+        .maybeSingle();
       resolvedCategoryId = firstCat?.id;
     } else {
       // If categoryId is not a valid uuid format, try to look up by slug or name
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
           .from("categories")
           .select("id")
           .or(`slug.eq.${resolvedCategoryId},name.ilike.${resolvedCategoryId}`)
-          .single();
+          .maybeSingle();
         if (catBySlug) {
           resolvedCategoryId = catBySlug.id;
         }
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
           is_new_arrival: !!newArrival,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (product) {
         // Insert Variants

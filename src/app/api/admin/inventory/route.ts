@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       .from("product_variants")
       .select("stock_quantity, reserved_quantity")
       .eq("id", variantId)
-      .single();
+      .maybeSingle();
 
     if (fetchErr || !variant) {
       throw new Error("Variant not found");

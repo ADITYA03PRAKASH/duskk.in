@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
           is_active: newCat.is_active,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (!error && category) {
         return NextResponse.json({

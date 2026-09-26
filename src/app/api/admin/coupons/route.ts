@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
           is_active: active !== false,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (!error && coupon) {
         return NextResponse.json({ success: true, data: coupon });
