@@ -72,51 +72,53 @@ export async function initiateCheckoutOrder(
     country: "India",
   };
 
-  let orderId = `ord_${Date.now()}`;
+  let orderId: string;
 
   // 7. Insert Order record into Supabase
-  try {
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from("orders")
-      .insert({
-        order_number: orderNumber,
-        customer_id: customerRecord.id,
-        status: "PENDING_PAYMENT",
-        subtotal_amount: calculation.subtotal,
-        discount_amount: calculation.discount,
-        shipping_amount: calculation.shippingCharge,
-        tax_amount: calculation.tax,
-        grand_total: calculation.totalAmount,
-        coupon_code: calculation.couponApplied?.code || null,
-        customer_snapshot: customerSnapshot,
-        shipping_address_snapshot: shippingAddressSnapshot,
-        customer_notes: notes || null,
-      })
-      .select()
-      .single();
+  const { data: order, error: orderError } = await supabaseAdmin
+    .from("orders")
+    .insert({
+      order_number: orderNumber,
+      customer_id: customerRecord.id,
+      status: "PENDING_PAYMENT",
+      subtotal_amount: calculation.subtotal,
+      discount_amount: calculation.discount,
+      shipping_amount: calculation.shippingCharge,
+      tax_amount: calculation.tax,
+      grand_total: calculation.totalAmount,
+      coupon_code: calculation.couponApplied?.code || null,
+      customer_snapshot: customerSnapshot,
+      shipping_address_snapshot: shippingAddressSnapshot,
+      customer_notes: notes || null,
+    })
+    .select()
+    .single();
 
-    if (!orderError && order) {
-      orderId = order.id;
+  if (orderError || !order) {
+    console.error("Order insertion error:", orderError);
+    throw new Error(`Failed to create order record: ${orderError?.message || "Unknown error"}`);
+  }
 
-      // 8. Insert Order Items
-      const orderItemsData = calculation.validatedItems.map((item) => ({
-        order_id: order.id,
-        product_id: item.productId,
-        variant_id: item.variantId || null,
-        product_title: item.name,
-        variant_title: item.variantTitle || null,
-        sku: item.sku,
-        image_url: item.image,
-        unit_price: item.mrp || item.price,
-        unit_sale_price: item.price,
-        quantity: item.quantity,
-        total_price: item.subtotal,
-      }));
+  orderId = order.id;
 
-      await supabaseAdmin.from("order_items").insert(orderItemsData);
-    }
-  } catch (err) {
-    console.warn("Order insertion fallback:", err);
+  // 8. Insert Order Items
+  const orderItemsData = calculation.validatedItems.map((item) => ({
+    order_id: orderId,
+    product_id: item.productId,
+    variant_id: item.variantId || null,
+    product_title: item.name,
+    variant_title: item.variantTitle || null,
+    sku: item.sku,
+    image_url: item.image,
+    unit_price: item.mrp || item.price,
+    unit_sale_price: item.price,
+    quantity: item.quantity,
+    total_price: item.subtotal,
+  }));
+
+  const { error: itemsError } = await supabaseAdmin.from("order_items").insert(orderItemsData);
+  if (itemsError) {
+    console.error("Order items insert error:", itemsError);
   }
 
   // 9. Concurrency-Safe Inventory Reservation RPC
@@ -139,16 +141,16 @@ export async function initiateCheckoutOrder(
   }
 
   // 10. Record initial payment record
-  try {
-    await supabaseAdmin.from("payments").insert({
-      order_id: orderId,
-      razorpay_order_id: razorpayOrder.id,
-      amount: calculation.totalAmount,
-      currency: "INR",
-      status: "created",
-    });
-  } catch (payErr) {
-    console.warn("Payment record insert fallback:", payErr);
+  const { error: payErr } = await supabaseAdmin.from("payments").insert({
+    order_id: orderId,
+    razorpay_order_id: razorpayOrder.id,
+    amount: calculation.totalAmount,
+    currency: "INR",
+    status: "created",
+  });
+
+  if (payErr) {
+    console.error("Payment record insert error:", payErr);
   }
 
   const resolvedOrder = {

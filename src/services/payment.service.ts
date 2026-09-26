@@ -1,74 +1,99 @@
 import crypto from "crypto";
-
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || "rzp_test_duskk_mock_key";
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "duskk_razorpay_secret_key_2026";
-const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || "duskk_webhook_secret_2026";
+import Razorpay from "razorpay";
 
 export interface CreateRazorpayOrderOptions {
-  amountInRupees: number;
-  receipt: string;
+  amountInPaise?: number;
+  amountInRupees?: number;
+  currency?: string;
+  receipt?: string;
   notes?: Record<string, string>;
 }
 
 export interface RazorpayOrderResponse {
   id: string;
+  order_id: string;
   amount: number;
   currency: string;
-  receipt: string;
+  receipt?: string;
   status: string;
 }
 
+/**
+ * Initializes and returns the official Razorpay SDK client.
+ */
+export function getRazorpayClient(): Razorpay {
+  const key_id = process.env.RAZORPAY_KEY_ID;
+  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!key_id || !key_secret) {
+    throw new Error("Razorpay credentials (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) are missing.");
+  }
+
+  return new Razorpay({
+    key_id,
+    key_secret,
+  });
+}
+
+/**
+ * Creates a Razorpay Order via SDK or REST API.
+ * Validates amount >= 100 paise (₹1.00).
+ */
 export async function createRazorpayOrder(
   options: CreateRazorpayOrderOptions
 ): Promise<RazorpayOrderResponse> {
-  const amountInPaise = Math.round(options.amountInRupees * 100);
+  const amountInPaise = options.amountInPaise !== undefined
+    ? Math.round(options.amountInPaise)
+    : options.amountInRupees !== undefined
+    ? Math.round(options.amountInRupees * 100)
+    : 0;
 
-  // If real live keys are present and not mock, we can call official Razorpay REST API
-  const isMock = RAZORPAY_KEY_ID.includes("mock") || !RAZORPAY_KEY_ID.startsWith("rzp_live");
-
-  if (!isMock && RAZORPAY_KEY_ID.startsWith("rzp_test_") && !RAZORPAY_KEY_ID.includes("mock")) {
-    try {
-      const authHeader = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString("base64");
-      const res = await fetch("https://api.razorpay.com/v1/orders", {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${authHeader}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          amount: amountInPaise,
-          currency: "INR",
-          receipt: options.receipt,
-          notes: options.notes,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          id: data.id,
-          amount: data.amount,
-          currency: data.currency,
-          receipt: data.receipt,
-          status: data.status,
-        };
-      }
-    } catch (e) {
-      console.warn("Direct Razorpay API call failed, falling back to local deterministic order generation:", e);
-    }
+  if (amountInPaise < 100) {
+    const error: any = new Error("Amount must be at least 100 paise (₹1.00).");
+    error.statusCode = 400;
+    throw error;
   }
 
-  // High-reliability deterministic Razorpay test order ID
-  const orderId = `order_${crypto.randomBytes(8).toString("hex")}`;
-  return {
-    id: orderId,
-    amount: amountInPaise,
-    currency: "INR",
-    receipt: options.receipt,
-    status: "created",
-  };
+  const currency = options.currency || "INR";
+  const receipt = options.receipt || `rcpt_${Date.now()}`;
+
+  try {
+    const razorpay = getRazorpayClient();
+    const order = await razorpay.orders.create({
+      amount: amountInPaise,
+      currency,
+      receipt,
+      notes: options.notes,
+    });
+
+    return {
+      id: order.id,
+      order_id: order.id,
+      amount: typeof order.amount === "number" ? order.amount : Number(order.amount),
+      currency: order.currency,
+      receipt: order.receipt || receipt,
+      status: order.status,
+    };
+  } catch (error: any) {
+    console.error("Error creating Razorpay order:", error);
+
+    // Differentiate authentication failure vs server/API errors
+    if (error?.statusCode === 401 || error?.error?.code === "BAD_REQUEST_ERROR" && error?.error?.description?.includes("auth")) {
+      const authErr: any = new Error("Razorpay Authentication failed. Please verify API keys.");
+      authErr.statusCode = 401;
+      throw authErr;
+    }
+
+    const apiErr: any = new Error(error?.error?.description || error?.message || "Failed to create Razorpay order.");
+    apiErr.statusCode = error?.statusCode || 500;
+    throw apiErr;
+  }
 }
 
+/**
+ * Verifies Razorpay payment signature using HMAC-SHA256 algorithm.
+ * Formula: HMAC_SHA256(order_id + "|" + payment_id, RAZORPAY_KEY_SECRET)
+ */
 export function verifyRazorpaySignature(
   razorpayOrderId: string,
   razorpayPaymentId: string,
@@ -78,38 +103,65 @@ export function verifyRazorpaySignature(
     return false;
   }
 
-  const generatedSignature = crypto
-    .createHmac("sha256", RAZORPAY_KEY_SECRET)
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keySecret) {
+    console.error("RAZORPAY_KEY_SECRET is not configured in environment variables.");
+    return false;
+  }
+
+  const expectedSignature = crypto
+    .createHmac("sha256", keySecret)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest("hex");
 
-  // Standard HMAC SHA256 Signature Verification
-  if (razorpaySignature === generatedSignature) {
-    return true;
+  const expectedBuf = Buffer.from(expectedSignature, "utf-8");
+  const receivedBuf = Buffer.from(razorpaySignature, "utf-8");
+
+  if (expectedBuf.length !== receivedBuf.length) {
+    return false;
   }
 
-  // Allow simulated mock signatures strictly in non-production development / testing
-  if (process.env.NODE_ENV !== "production" && razorpaySignature === `sim_sig_${razorpayPaymentId}`) {
-    return true;
-  }
-
-  return false;
+  return crypto.timingSafeEqual(expectedBuf, receivedBuf);
 }
 
+/**
+ * Verifies Razorpay Webhook signature using HMAC-SHA256
+ */
 export function verifyWebhookSignature(payloadBody: string, receivedSignature: string): boolean {
   if (!receivedSignature || !payloadBody) return false;
 
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error("RAZORPAY_WEBHOOK_SECRET is not configured in environment variables.");
+    return false;
+  }
+
   const expectedSignature = crypto
-    .createHmac("sha256", RAZORPAY_WEBHOOK_SECRET)
+    .createHmac("sha256", webhookSecret)
     .update(payloadBody)
     .digest("hex");
 
-  return expectedSignature === receivedSignature;
+  const expectedBuf = Buffer.from(expectedSignature, "utf-8");
+  const receivedBuf = Buffer.from(receivedSignature, "utf-8");
+
+  if (expectedBuf.length !== receivedBuf.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuf, receivedBuf);
 }
 
+/**
+ * Generates HMAC signature for test environments using configured key secret
+ */
 export function generateMockPaymentSignature(razorpayOrderId: string, razorpayPaymentId: string): string {
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret) {
+    throw new Error("RAZORPAY_KEY_SECRET is required to generate payment signature.");
+  }
   return crypto
-    .createHmac("sha256", RAZORPAY_KEY_SECRET)
+    .createHmac("sha256", secret)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest("hex");
 }
+

@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
           email: customer.email.trim(),
           phone: customer.phone.trim(),
         },
-        keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "rzp_test_duskk_mock_key",
+        keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "",
       },
     });
   } catch (error: any) {

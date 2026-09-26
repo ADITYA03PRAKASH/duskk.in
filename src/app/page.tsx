@@ -3,76 +3,34 @@ import Link from "next/link";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
-import { getProducts, getCategories, getBanners } from "@/services/catalog.service";
+import { getProducts, getCategories } from "@/services/catalog.service";
 import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award } from "lucide-react";
+
+import { Hero } from "@/components/home/Hero";
 
 export const revalidate = 60; // ISR cache 60 seconds
 
 export default async function HomePage() {
-  const [categories, featuredResult, bestSellersResult, banners] = await Promise.all([
+  const [categories, featuredResult, bestSellersResult] = await Promise.all([
     getCategories(),
     getProducts({ limit: 4, featured: true }),
     getProducts({ limit: 4, bestSeller: true }),
-    getBanners(),
   ]);
 
   const featuredProducts = featuredResult.products;
   const bestSellers = bestSellersResult.products;
-  const heroBanner = banners.find((b: any) => b.banner_type === "hero") || banners[0];
-  const heroImage = heroBanner?.image_url_desktop || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1920&q=85";
-  const heroTitle = heroBanner?.title || "Where Modern Allure Meets Timeless Craft";
-  const heroSubtitle = heroBanner?.subtitle || "Elevate your signature silhouette with artisanal jewelry crafted in demi-fine gold, authentic pearls, and celestial zircons.";
-  const heroLink = heroBanner?.link_url || "/shop";
 
   return (
     <>
       <Navbar />
 
       <main className="flex-1">
-        {/* 1. HERO SECTION */}
-        <section className="relative min-h-[85vh] flex items-center bg-duskk-900 text-white overflow-hidden">
-          {/* Hero background image with dark gradient */}
-          <div className="absolute inset-0 z-0">
-            <img
-              src={heroImage}
-              alt="DUSKK Hero Collection"
-              className="w-full h-full object-cover object-center opacity-40 mix-blend-luminosity scale-105 transform hover:scale-100 transition-transform duration-1000"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-duskk-900 via-duskk-900/60 to-transparent" />
-          </div>
-
-          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 flex flex-col items-start max-w-2xl">
-            <span className="inline-flex items-center space-x-2 text-xs font-mono tracking-[0.3em] uppercase text-duskk-gold mb-4 border border-duskk-gold/30 px-3 py-1 rounded-full bg-black/40 backdrop-blur-sm">
-              <Sparkles className="w-3.5 h-3.5 text-duskk-gold" />
-              <span>AUTUMN / WINTER 2026</span>
-            </span>
-
-            <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-light tracking-wide text-white leading-tight mb-6">
-              {heroTitle}
-            </h1>
-
-            <p className="text-sm sm:text-base text-duskk-200 leading-relaxed font-light mb-8 max-w-xl">
-              {heroSubtitle}
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-              <Link
-                href={heroLink}
-                className="px-8 py-4 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 font-medium text-xs tracking-[0.2em] uppercase transition duration-300 text-center shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
-              >
-                <span>Explore Collection</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-
-              <Link
-                href="/category/earrings"
-                className="px-8 py-4 border border-white/40 hover:border-white text-white font-medium text-xs tracking-[0.2em] uppercase transition duration-300 text-center hover:bg-white/10"
-              >
-                <span>New Arrivals</span>
-              </Link>
-            </div>
-          </div>
-        </section>
+        {/* 1. HERO VIDEO SECTION */}
+        <Hero
+          initialTitle="Thoughtful Gifts. Meaningful Moments."
+          initialSubtitle="Discover gifts made for celebrations, connections, and everyday moments."
+          initialLink="/shop"
+        />
 
         {/* 2. FEATURED CATEGORIES */}
         <section className="py-20 bg-duskk-cream">

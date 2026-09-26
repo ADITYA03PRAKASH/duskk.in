@@ -7,6 +7,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useCart } from "@/context/CartContext";
 import { RazorpayPaymentModal } from "@/components/cart/RazorpayModal";
+import { openRazorpayModal } from "@/lib/razorpay-client";
 import { formatPrice } from "@/lib/utils";
 import {
   ShieldCheck,
@@ -140,7 +141,7 @@ export default function CheckoutPage() {
     setIsInitializingPayment(true);
 
     try {
-      // 1. Send checkout payload to backend
+      // 1. Create order on backend with Razorpay
       const res = await fetch("/api/payments/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,11 +173,70 @@ export default function CheckoutPage() {
         throw new Error(data.message || "Failed to initialize order.");
       }
 
-      // 2. Open payment modal with backend data
-      setPaymentModalData(data.data);
+      const orderData = data.data;
+
+      // 2. Open official Razorpay Standard Checkout popup modal
+      await openRazorpayModal({
+        key: orderData.keyId,
+        orderId: orderData.razorpayOrderId,
+        amount: Math.round(orderData.amount * 100),
+        currency: orderData.currency || "INR",
+        name: "DUSKK Jewellery",
+        description: `Order #${orderData.orderNumber}`,
+        image: "/icon.png",
+        customer: {
+          name: orderData.customer.name,
+          email: orderData.customer.email,
+          phone: orderData.customer.phone,
+        },
+        themeColor: "#0F0F0F",
+        onSuccess: async (response) => {
+          try {
+            // 3. Verify signature on backend
+            const verifyRes = await fetch("/api/payments/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (verifyRes.ok && verifyData.success) {
+              clearCart();
+              router.push(
+                `/order/success?orderNumber=${encodeURIComponent(
+                  verifyData.data?.orderNumber || orderData.orderNumber
+                )}&email=${encodeURIComponent(
+                  verifyData.data?.customerEmail || orderData.customer.email
+                )}`
+              );
+            } else {
+              setErrorMessage(
+                verifyData.message || "Payment signature verification failed. Please contact support."
+              );
+              setIsInitializingPayment(false);
+            }
+          } catch (err: any) {
+            setErrorMessage(err.message || "Payment verification failed.");
+            setIsInitializingPayment(false);
+          }
+        },
+        onDismiss: () => {
+          setIsInitializingPayment(false);
+        },
+        onFailure: (error) => {
+          console.error("Razorpay Payment Failed:", error);
+          setErrorMessage(
+            error?.description || "Payment was declined or failed. Please try again."
+          );
+          setIsInitializingPayment(false);
+        },
+      });
     } catch (err: any) {
       setErrorMessage(err.message || "Checkout could not be initialized.");
-    } finally {
       setIsInitializingPayment(false);
     }
   };
