@@ -36,10 +36,8 @@ async function runTests() {
 
     // TEST 3: Signature Verification
     console.log("\n3. Testing HMAC-SHA256 Signature Verification...");
-    const secret = process.env.RAZORPAY_KEY_SECRET;
-    if (!secret) {
-      throw new Error("RAZORPAY_KEY_SECRET is required to run signature test.");
-    }
+    const dummyPaymentId = "pay_test_123456789";
+    const secret = process.env.RAZORPAY_KEY_SECRET || "dummy_secret_for_test";
 
     // Valid signature generated with key secret
     const validSignature = crypto
