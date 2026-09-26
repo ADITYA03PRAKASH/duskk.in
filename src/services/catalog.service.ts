@@ -319,7 +319,7 @@ export async function getProducts(params: ProductQueryParams) {
             .from("categories")
             .select("id")
             .eq("slug", category)
-            .single(),
+            .maybeSingle(),
           8000
         );
         if (catData) {
@@ -360,7 +360,9 @@ export async function getProducts(params: ProductQueryParams) {
 
     const { data, count, error } = await withTimeout(query, 8000);
 
-    if (error || !data || data.length === 0) {
+    const hasFilters = Boolean(category || search || featured || bestSeller || newArrival || minPrice !== undefined || maxPrice !== undefined);
+
+    if (error || !data || (data.length === 0 && !hasFilters)) {
       let fallbackList = [...FALLBACK_PRODUCTS];
       if (category) {
         fallbackList = fallbackList.filter((p) => p.category?.slug === category);
@@ -516,7 +518,7 @@ export async function getProductBySlug(slug: string) {
         `)
         .eq("slug", slug)
         .eq("status", "active")
-        .single(),
+        .maybeSingle(),
       8000
     );
 

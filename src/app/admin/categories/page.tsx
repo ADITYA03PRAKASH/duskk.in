@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, X, Check, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Check, Loader2, Upload, Image as ImageIcon } from "lucide-react";
 
 export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState<any[]>([]);
@@ -13,9 +13,35 @@ export default function AdminCategoriesPage() {
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [sortOrder, setSortOrder] = useState("0");
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "category-images");
+      const res = await fetch("/api/storage/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.data?.url) {
+        setImage(data.data.url);
+      } else {
+        alert(data.message || "Failed to upload image file");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to upload image file");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const loadCategories = async () => {
     setLoading(true);
@@ -219,13 +245,45 @@ export default function AdminCategoriesPage() {
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Image URL</label>
-                <input
-                  type="url"
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
-                />
+                <label className="block font-semibold mb-1">Category Image</label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className={`cursor-pointer px-3 py-1.5 bg-duskk-100 hover:bg-duskk-200 text-duskk-900 border border-duskk-300 rounded font-semibold text-xs flex items-center space-x-1.5 transition ${uploadingImage ? "opacity-50 pointer-events-none" : ""}`}>
+                      {uploadingImage ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-duskk-900" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5 text-duskk-700" />
+                      )}
+                      <span>{uploadingImage ? "Uploading..." : "Upload File"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageFileUpload}
+                        disabled={uploadingImage}
+                      />
+                    </label>
+                    <span className="text-[10px] text-duskk-400 font-mono">PNG, JPG, WEBP</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {image ? (
+                      <div className="w-10 h-10 rounded border border-duskk-200 overflow-hidden bg-duskk-50 flex-shrink-0">
+                        <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded border border-dashed border-duskk-300 bg-duskk-50 flex items-center justify-center text-duskk-400 flex-shrink-0">
+                        <ImageIcon className="w-4 h-4" />
+                      </div>
+                    )}
+                    <input
+                      type="url"
+                      value={image}
+                      onChange={(e) => setImage(e.target.value)}
+                      placeholder="Or paste image URL"
+                      className="w-full px-3 py-1.5 border rounded text-xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>

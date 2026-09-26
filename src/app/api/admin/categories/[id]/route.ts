@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -30,51 +31,49 @@ export async function PUT(
     if (slug) updates.slug = slug;
     if (description !== undefined) updates.description = description;
     if (imageUrl !== undefined) updates.image_url = imageUrl;
-    if (parentId !== undefined) updates.parent_id = parentId;
+    if (parentId !== undefined) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parentId);
+      updates.parent_id = isUUID ? parentId : null;
+    }
     if (displayOrder !== undefined) updates.display_order = displayOrder;
     if (isFeatured !== undefined) updates.is_featured = isFeatured;
     if (isActive !== undefined) updates.is_active = isActive;
 
-    const fallbackCategory = {
-      id: params.id,
-      name: name || "Category",
-      slug: slug || "category",
-      description: description || null,
-      image_url: imageUrl || null,
-      image: imageUrl || null,
-      parent_id: parentId || null,
-      display_order: displayOrder ?? 0,
-      sortOrder: displayOrder ?? 0,
-      is_featured: !!isFeatured,
-      is_active: isActive !== false,
-      active: isActive !== false,
-      updated_at: new Date().toISOString(),
-    };
+    const { data: updated, error } = await supabaseAdmin
+      .from("categories")
+      .update(updates)
+      .eq("id", params.id)
+      .select()
+      .maybeSingle();
 
-    try {
-      const { data: updated, error } = await supabaseAdmin
-        .from("categories")
-        .update(updates)
-        .eq("id", params.id)
-        .select()
-        .single();
-
-      if (!error && updated) {
-        return NextResponse.json({
-          success: true,
-          data: {
-            ...updated,
-            image: updated.image_url,
-            sortOrder: updated.display_order,
-            active: updated.is_active,
-          }
-        });
-      }
-    } catch (dbErr) {
-      console.warn("Supabase category update fallback:", dbErr);
+    if (error) {
+      throw new Error(`Database error: ${error.message}`);
     }
 
-    return NextResponse.json({ success: true, data: fallbackCategory });
+    if (!updated) {
+      return NextResponse.json({ success: false, message: "Category not found in database" }, { status: 404 });
+    }
+
+    try {
+      revalidatePath("/", "page");
+      revalidatePath("/shop", "page");
+      revalidatePath("/category/[slug]", "page");
+      if (updated.slug) {
+        revalidatePath(`/category/${updated.slug}`, "page");
+      }
+    } catch (revErr) {
+      console.warn("Revalidation warning:", revErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...updated,
+        image: updated.image_url,
+        sortOrder: updated.display_order,
+        active: updated.is_active,
+      }
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
@@ -92,13 +91,24 @@ export async function DELETE(
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
+    const { data: cat, error } = await supabaseAdmin
+      .from("categories")
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq("id", params.id)
+      .select("slug")
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+
     try {
-      await supabaseAdmin
-        .from("categories")
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq("id", params.id);
-    } catch (dbErr) {
-      console.warn("Supabase category delete fallback:", dbErr);
+      revalidatePath("/", "page");
+      revalidatePath("/shop", "page");
+      revalidatePath("/category/[slug]", "page");
+      if (cat?.slug) {
+        revalidatePath(`/category/${cat.slug}`, "page");
+      }
+    } catch (revErr) {
+      console.warn("Revalidation warning on category delete:", revErr);
     }
 
     return NextResponse.json({ success: true, message: "Category deactivated successfully" });

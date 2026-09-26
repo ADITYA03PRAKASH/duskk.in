@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -87,40 +88,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Title and image are required" }, { status: 400 });
     }
 
-    const newBanner = {
-      id: `banner_${Date.now()}`,
-      key: key || "hero",
-      title,
-      subtitle: subtitle || null,
-      image: image,
-      link: link || null,
-      sortOrder: sortOrder || 0,
-      active: active !== false,
-    };
+    const { data: banner, error } = await supabaseAdmin
+      .from("banners")
+      .insert({
+        banner_type: key || "hero",
+        title,
+        subtitle: subtitle || null,
+        image_url_desktop: image,
+        link_url: link || null,
+        display_order: sortOrder || 0,
+        is_active: active !== false,
+      })
+      .select()
+      .maybeSingle();
 
-    try {
-      const { data: banner, error } = await supabaseAdmin
-        .from("banners")
-        .insert({
-          banner_type: key || "hero",
-          title,
-          subtitle: subtitle || null,
-          image_url_desktop: image,
-          link_url: link || null,
-          display_order: sortOrder || 0,
-          is_active: active !== false,
-        })
-        .select()
-        .maybeSingle();
-
-      if (!error && banner) {
-        return NextResponse.json({ success: true, data: banner });
-      }
-    } catch (dbErr) {
-      console.warn("Supabase banner insert fallback:", dbErr);
+    if (error || !banner) {
+      throw new Error(error?.message || "Failed to create banner in database");
     }
 
-    return NextResponse.json({ success: true, data: newBanner });
+    try {
+      revalidatePath("/", "page");
+    } catch (revErr) {
+      console.warn("Revalidation warning:", revErr);
+    }
+
+    return NextResponse.json({ success: true, data: banner });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

@@ -14,6 +14,8 @@ import {
   Loader2,
   Sparkles,
   ExternalLink,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export default function AdminProductsPage() {
@@ -40,8 +42,35 @@ export default function AdminProductsPage() {
   const [bestSeller, setBestSeller] = useState(false);
   const [newArrival, setNewArrival] = useState(true);
   const [imageUrl, setImageUrl] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    setErrorMsg("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "product-images");
+      const res = await fetch("/api/storage/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.data?.url) {
+        setImageUrl(data.data.url);
+      } else {
+        setErrorMsg(data.message || "Failed to upload image file to Supabase Storage");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to upload image file");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -413,14 +442,46 @@ export default function AdminProductsPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-duskk-700 uppercase mb-1">Primary Image URL</label>
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full px-3 py-2 border border-duskk-300 rounded"
-                />
+                <label className="block font-semibold text-duskk-700 uppercase mb-1">Product Image</label>
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <label className={`cursor-pointer px-4 py-2 bg-duskk-100 hover:bg-duskk-200 text-duskk-900 border border-duskk-300 rounded font-semibold text-xs flex items-center space-x-2 transition ${uploadingImage ? "opacity-50 pointer-events-none" : ""}`}>
+                      {uploadingImage ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-duskk-900" />
+                      ) : (
+                        <Upload className="w-4 h-4 text-duskk-700" />
+                      )}
+                      <span>{uploadingImage ? "Uploading to Supabase..." : "Upload Image File"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageFileUpload}
+                        disabled={uploadingImage}
+                      />
+                    </label>
+                    <span className="text-[11px] text-duskk-400 font-mono">PNG, JPG, WEBP (Max 5MB)</span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {imageUrl ? (
+                      <div className="w-14 h-14 rounded border border-duskk-200 overflow-hidden bg-duskk-50 flex-shrink-0 relative group">
+                        <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 rounded border border-dashed border-duskk-300 bg-duskk-50 flex items-center justify-center text-duskk-400 flex-shrink-0">
+                        <ImageIcon className="w-6 h-6" />
+                      </div>
+                    )}
+                    <input
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="Or paste image URL (e.g. Supabase / Unsplash)"
+                      className="w-full px-3 py-2 border border-duskk-300 rounded text-xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

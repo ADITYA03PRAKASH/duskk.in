@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -28,7 +29,15 @@ export async function GET() {
         return NextResponse.json({ success: true, data: SEED_CATEGORIES });
       }
 
-      return NextResponse.json({ success: true, data: categories });
+      return NextResponse.json({
+        success: true,
+        data: categories.map((c) => ({
+          ...c,
+          image: c.image_url,
+          sortOrder: c.display_order,
+          active: c.is_active,
+        })),
+      });
     } catch {
       return NextResponse.json({ success: true, data: SEED_CATEGORIES });
     }
@@ -60,54 +69,55 @@ export async function POST(req: NextRequest) {
 
     const catSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-    const newCat = {
-      id: `cat_${Date.now()}`,
+    const insertPayload: Record<string, any> = {
       name,
       slug: catSlug,
       description: description || null,
       image_url: imageUrl || null,
-      image: imageUrl || null,
-      parent_id: parentId || null,
       display_order: displayOrder,
-      sortOrder: displayOrder,
       is_featured: !!isFeatured,
       is_active: isActive !== false,
-      active: isActive !== false,
     };
 
-    try {
-      const { data: category, error } = await supabaseAdmin
-        .from("categories")
-        .insert({
-          id: newCat.id,
-          name: newCat.name,
-          slug: newCat.slug,
-          description: newCat.description,
-          image_url: newCat.image_url,
-          parent_id: newCat.parent_id,
-          display_order: newCat.display_order,
-          is_featured: newCat.is_featured,
-          is_active: newCat.is_active,
-        })
-        .select()
-        .maybeSingle();
-
-      if (!error && category) {
-        return NextResponse.json({
-          success: true,
-          data: {
-            ...category,
-            image: category.image_url,
-            sortOrder: category.display_order,
-            active: category.is_active,
-          }
-        });
-      }
-    } catch (dbErr) {
-      console.warn("Supabase category insert fallback:", dbErr);
+    if (parentId) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parentId);
+      if (isUUID) insertPayload.parent_id = parentId;
     }
 
-    return NextResponse.json({ success: true, data: newCat });
+    const { data: category, error } = await supabaseAdmin
+      .from("categories")
+      .insert(insertPayload)
+      .select()
+      .maybeSingle();
+
+    if (error || !category) {
+      console.error("Supabase category insert error:", error);
+      return NextResponse.json(
+        { success: false, message: error?.message || "Failed to create category in database" },
+        { status: 500 }
+      );
+    }
+
+    try {
+      revalidatePath("/", "page");
+      revalidatePath("/shop", "page");
+      revalidatePath("/category/[slug]", "page");
+      if (category.slug) {
+        revalidatePath(`/category/${category.slug}`, "page");
+      }
+    } catch (revErr) {
+      console.warn("Revalidation warning:", revErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...category,
+        image: category.image_url,
+        sortOrder: category.display_order,
+        active: category.is_active,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -179,6 +180,19 @@ export async function PUT(
       }
     }
 
+    // Revalidate Storefront Caches
+    try {
+      revalidatePath("/", "page");
+      revalidatePath("/shop", "page");
+      revalidatePath("/category/[slug]", "page");
+      revalidatePath("/product/[slug]", "page");
+      if (updated.slug) {
+        revalidatePath(`/product/${updated.slug}`, "page");
+      }
+    } catch (revErr) {
+      console.warn("Revalidation warning:", revErr);
+    }
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
     console.error("PUT /api/admin/products/[id] error:", error);
@@ -199,12 +213,26 @@ export async function DELETE(
     }
 
     // Soft-delete by setting status = 'archived'
-    const { error } = await supabaseAdmin
+    const { data: archivedProduct, error } = await supabaseAdmin
       .from("products")
       .update({ status: "archived", updated_at: new Date().toISOString() })
-      .eq("id", params.id);
+      .eq("id", params.id)
+      .select("slug")
+      .maybeSingle();
 
     if (error) throw new Error(error.message);
+
+    try {
+      revalidatePath("/", "page");
+      revalidatePath("/shop", "page");
+      revalidatePath("/category/[slug]", "page");
+      revalidatePath("/product/[slug]", "page");
+      if (archivedProduct?.slug) {
+        revalidatePath(`/product/${archivedProduct.slug}`, "page");
+      }
+    } catch (revErr) {
+      console.warn("Revalidation warning on delete:", revErr);
+    }
 
     return NextResponse.json({ success: true, message: "Product archived successfully" });
   } catch (error: any) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -187,52 +188,66 @@ export async function POST(req: NextRequest) {
         .select()
         .maybeSingle();
 
-      if (product) {
-        // Insert Variants
-        if (variants && Array.isArray(variants) && variants.length > 0) {
-          const variantInserts = variants.map((v: any, idx: number) => ({
-            product_id: product.id,
-            sku: v.sku || `${product.sku}-V${idx + 1}`,
-            title: v.title || v.name || `Variant ${idx + 1}`,
-            options: v.options || {},
-            price_override: v.price || null,
-            stock_quantity: v.stockQuantity || stockQuantity || 10,
-            reserved_quantity: 0,
-            is_active: true,
-          }));
-
-          await supabaseAdmin.from("product_variants").insert(variantInserts);
-        } else {
-          // Create default variant
-          await supabaseAdmin.from("product_variants").insert({
-            product_id: product.id,
-            sku: `${product.sku}-DEF`,
-            title: "Standard",
-            stock_quantity: stockQuantity || 15,
-            reserved_quantity: 0,
-            is_active: true,
-          });
-        }
-
-        // Insert Images
-        if (images && Array.isArray(images) && images.length > 0) {
-          const imgInserts = images.map((img: any, idx: number) => ({
-            product_id: product.id,
-            image_url: typeof img === "string" ? img : img.url,
-            alt_text: product.title,
-            display_order: idx,
-            is_primary: idx === 0,
-          }));
-          await supabaseAdmin.from("product_images").insert(imgInserts);
-        }
-
-        return NextResponse.json({ success: true, data: product });
+      if (prodErr || !product) {
+        throw new Error(prodErr?.message || "Failed to insert product in database");
       }
-    } catch (dbErr) {
-      console.warn("Supabase product insert fallback:", dbErr);
-    }
 
-    return NextResponse.json({ success: true, data: newProduct });
+      // Insert Variants
+      if (variants && Array.isArray(variants) && variants.length > 0) {
+        const variantInserts = variants.map((v: any, idx: number) => ({
+          product_id: product.id,
+          sku: v.sku || `${product.sku}-V${idx + 1}`,
+          title: v.title || v.name || `Variant ${idx + 1}`,
+          options: v.options || {},
+          price_override: v.price || null,
+          stock_quantity: v.stockQuantity || stockQuantity || 10,
+          reserved_quantity: 0,
+          is_active: true,
+        }));
+
+        await supabaseAdmin.from("product_variants").insert(variantInserts);
+      } else {
+        // Create default variant
+        await supabaseAdmin.from("product_variants").insert({
+          product_id: product.id,
+          sku: `${product.sku}-DEF`,
+          title: "Standard",
+          stock_quantity: stockQuantity || 15,
+          reserved_quantity: 0,
+          is_active: true,
+        });
+      }
+
+      // Insert Images
+      if (images && Array.isArray(images) && images.length > 0) {
+        const imgInserts = images.map((img: any, idx: number) => ({
+          product_id: product.id,
+          image_url: typeof img === "string" ? img : img.url,
+          alt_text: product.title,
+          display_order: idx,
+          is_primary: idx === 0,
+        }));
+        await supabaseAdmin.from("product_images").insert(imgInserts);
+      }
+
+      // Revalidate Storefront Caches
+      try {
+        revalidatePath("/", "page");
+        revalidatePath("/shop", "page");
+        revalidatePath("/category/[slug]", "page");
+        revalidatePath("/product/[slug]", "page");
+        if (product.slug) {
+          revalidatePath(`/product/${product.slug}`, "page");
+        }
+      } catch (revErr) {
+        console.warn("Revalidation error after product create:", revErr);
+      }
+
+      return NextResponse.json({ success: true, data: product });
+    } catch (dbErr: any) {
+      console.error("Supabase product insert error:", dbErr);
+      return NextResponse.json({ success: false, message: dbErr.message || "Failed to create product" }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("POST /api/admin/products error:", error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
