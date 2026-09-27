@@ -144,6 +144,21 @@ export default function AdminProductsPage() {
     setSaving(true);
     setErrorMsg("");
 
+    const numPrice = price !== "" ? Number(price) : undefined;
+    const numMrp = mrp !== "" ? Number(mrp) : undefined;
+
+    if (numPrice !== undefined && numPrice < 0) {
+      setErrorMsg("Selling price cannot be negative.");
+      setSaving(false);
+      return;
+    }
+
+    if (numPrice !== undefined && numMrp !== undefined && numMrp > 0 && numPrice > numMrp) {
+      setErrorMsg(`Selling Price (₹${price}) cannot exceed MRP (₹${mrp}). In retail, MRP is the original maximum price and Selling Price is the discounted offer price.`);
+      setSaving(false);
+      return;
+    }
+
     const payload = {
       sku,
       name,
@@ -412,10 +427,17 @@ export default function AdminProductsPage() {
                     type="number"
                     required
                     value={price}
-                    onChange={(e) => setPrice(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPrice(val);
+                      if (!mrp || (val && Number(mrp) < Number(val))) {
+                        setMrp(val);
+                      }
+                    }}
                     placeholder="2499"
                     className="w-full px-3 py-2 border border-duskk-300 rounded"
                   />
+                  <p className="text-[10px] text-duskk-500 mt-1">Customer purchase price</p>
                 </div>
 
                 <div>
@@ -427,6 +449,7 @@ export default function AdminProductsPage() {
                     placeholder="3499"
                     className="w-full px-3 py-2 border border-duskk-300 rounded"
                   />
+                  <p className="text-[10px] text-duskk-500 mt-1">Catalog MRP (≥ Selling Price)</p>
                 </div>
 
                 <div>
@@ -438,6 +461,7 @@ export default function AdminProductsPage() {
                     onChange={(e) => setStockQuantity(e.target.value)}
                     className="w-full px-3 py-2 border border-duskk-300 rounded"
                   />
+                  <p className="text-[10px] text-duskk-500 mt-1">Units available</p>
                 </div>
               </div>
 

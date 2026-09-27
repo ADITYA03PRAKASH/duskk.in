@@ -96,8 +96,30 @@ export async function PUT(
     const numMrp = mrp !== undefined && mrp !== "" ? Number(mrp) : undefined;
     const numPrice = price !== undefined && price !== "" ? Number(price) : undefined;
 
-    if (numMrp !== undefined) updates.base_price = numMrp;
-    if (numPrice !== undefined) updates.sale_price = numPrice;
+    if (numPrice !== undefined || numMrp !== undefined) {
+      if (numPrice !== undefined && numPrice < 0) {
+        return NextResponse.json({ success: false, message: "Selling price cannot be negative." }, { status: 400 });
+      }
+      if (numMrp !== undefined && numMrp < 0) {
+        return NextResponse.json({ success: false, message: "MRP cannot be negative." }, { status: 400 });
+      }
+
+      if (numMrp !== undefined && numPrice !== undefined) {
+        if (numMrp >= numPrice) {
+          updates.base_price = numMrp;
+          updates.sale_price = numMrp > numPrice ? numPrice : null;
+        } else {
+          // If selling price exceeds MRP, elevate base_price to selling price so products_check constraint is never violated
+          updates.base_price = numPrice;
+          updates.sale_price = null;
+        }
+      } else if (numPrice !== undefined) {
+        updates.base_price = numPrice;
+        updates.sale_price = null;
+      } else if (numMrp !== undefined) {
+        updates.base_price = numMrp;
+      }
+    }
     if (status) updates.status = status;
     if (featured !== undefined) updates.is_featured = featured;
     if (bestSeller !== undefined) updates.is_bestseller = bestSeller;

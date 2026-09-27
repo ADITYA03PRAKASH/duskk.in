@@ -145,24 +145,21 @@ export async function POST(req: NextRequest) {
       color: color || "Gold",
     };
 
-    const newProduct = {
-      id: `prod_${Date.now()}`,
-      title: prodTitle,
-      slug: prodSlug,
-      sku: prodSku,
-      short_description: shortDescription || null,
-      description: description || prodTitle,
-      category_id: resolvedCategoryId,
-      subcategory_id: subcategoryId || null,
-      base_price: mrp || price,
-      sale_price: mrp && mrp > price ? price : null,
-      specifications: specs,
-      status: "active",
-      is_featured: !!featured,
-      is_bestseller: !!bestSeller,
-      is_new_arrival: !!newArrival,
-      created_at: new Date().toISOString(),
-    };
+    const numMrp = mrp !== undefined && mrp !== "" ? Number(mrp) : undefined;
+    const numPrice = price !== undefined && price !== "" ? Number(price) : 0;
+
+    let finalBasePrice = numPrice;
+    let finalSalePrice: number | null = null;
+
+    if (numMrp !== undefined) {
+      if (numMrp > numPrice) {
+        finalBasePrice = numMrp;
+        finalSalePrice = numPrice;
+      } else {
+        finalBasePrice = numPrice;
+        finalSalePrice = null;
+      }
+    }
 
     try {
       // Insert Product
@@ -176,8 +173,8 @@ export async function POST(req: NextRequest) {
           description: description || prodTitle,
           category_id: resolvedCategoryId,
           subcategory_id: subcategoryId || null,
-          base_price: mrp || price,
-          sale_price: mrp && mrp > price ? price : null,
+          base_price: finalBasePrice,
+          sale_price: finalSalePrice,
           specifications: specs,
           status: "active",
           is_featured: !!featured,
