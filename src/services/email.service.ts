@@ -80,24 +80,58 @@ function createTransporter(targetPort?: number): nodemailer.Transporter | null {
   });
 }
 
-// Resilient SendMail with Port 587 -> Port 465 fallback
-async function executeSendMail(mailOptions: nodemailer.SendMailOptions): Promise<boolean> {
+export interface EmailSendResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  code?: string;
+  responseCode?: number;
+  response?: string;
+  envCheck?: {
+    hasHost: boolean;
+    hasPort: boolean;
+    hasUser: boolean;
+    hasPass: boolean;
+    hasFrom: boolean;
+  };
+}
+
+// Resilient SendMail with Port 587 -> Port 465 fallback and structured error capture
+export async function executeSendMailDetailed(mailOptions: nodemailer.SendMailOptions): Promise<EmailSendResult> {
   const preferredPort = parseInt(
     (process.env.SMTP_PORT || "587").toString().replace(/^["']|["']$/g, "").trim(),
     10
   );
   const fallbackPort = preferredPort === 465 ? 587 : 465;
 
+  const envCheck = {
+    hasHost: !!(process.env.SMTP_HOST || process.env.BREVO_SMTP_HOST),
+    hasPort: !!(process.env.SMTP_PORT || process.env.BREVO_SMTP_PORT),
+    hasUser: !!(process.env.SMTP_USER || process.env.BREVO_SMTP_USER || process.env.BREVO_USER || process.env.EMAIL_SERVER_USER || process.env.EMAIL_USER),
+    hasPass: !!(process.env.SMTP_PASSWORD || process.env.BREVO_SMTP_PASSWORD || process.env.BREVO_SMTP_KEY || process.env.BREVO_PASSWORD || process.env.EMAIL_SERVER_PASSWORD || process.env.EMAIL_PASSWORD),
+    hasFrom: !!(process.env.SMTP_FROM || process.env.BREVO_SMTP_FROM),
+  };
+
   // Attempt Primary Port
   let transporter = createTransporter(preferredPort);
   if (!transporter) {
-    return false;
+    return {
+      success: false,
+      error: "SMTP credentials not configured (SMTP_USER or SMTP_PASSWORD missing)",
+      envCheck,
+    };
   }
 
   try {
     const info = await transporter.sendMail(mailOptions);
     console.log(`📧 Email delivered via port ${preferredPort} | messageId: ${info.messageId}`);
-    return true;
+    return {
+      success: true,
+      messageId: info.messageId,
+      response: info.response,
+      responseCode: info.responseCode,
+      envCheck,
+    };
   } catch (primaryErr: any) {
     console.warn(`SMTP primary port ${preferredPort} failed (${primaryErr?.code || primaryErr?.message}), attempting port ${fallbackPort} fallback...`);
 
@@ -105,16 +139,111 @@ async function executeSendMail(mailOptions: nodemailer.SendMailOptions): Promise
     try {
       transporter = createTransporter(fallbackPort);
       if (!transporter) {
-        return false;
+        return {
+          success: false,
+          error: "Fallback transporter creation failed",
+          envCheck,
+        };
       }
       const fallbackInfo = await transporter.sendMail(mailOptions);
       console.log(`📧 Email delivered via fallback port ${fallbackPort} | messageId: ${fallbackInfo.messageId}`);
-      return true;
+      return {
+        success: true,
+        messageId: fallbackInfo.messageId,
+        response: fallbackInfo.response,
+        responseCode: fallbackInfo.responseCode,
+        envCheck,
+      };
     } catch (fallbackErr: any) {
       console.error(`SMTP delivery failed on both ports (${preferredPort}/${fallbackPort}):`, fallbackErr?.message || "Unknown error");
-      return false;
+      return {
+        success: false,
+        error: fallbackErr?.message || primaryErr?.message || "SMTP transmission failed",
+        code: fallbackErr?.code || primaryErr?.code,
+        responseCode: fallbackErr?.responseCode || primaryErr?.responseCode,
+        response: fallbackErr?.response || primaryErr?.response,
+        envCheck,
+      };
     }
   }
+}
+
+async function executeSendMail(mailOptions: nodemailer.SendMailOptions): Promise<boolean> {
+  const result = await executeSendMailDetailed(mailOptions);
+  return result.success;
+}
+
+// SMTP Diagnostic Runner for Production Health Inspection
+export async function runSmtpDiagnostics() {
+  const host = (process.env.SMTP_HOST || process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com").replace(/^["']|["']$/g, "").trim();
+  const port = (process.env.SMTP_PORT || "587").toString().replace(/^["']|["']$/g, "").trim();
+  const from = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
+
+  const envCheck = {
+    SMTP_HOST_PRESENT: !!process.env.SMTP_HOST,
+    SMTP_PORT_PRESENT: !!process.env.SMTP_PORT,
+    SMTP_USER_PRESENT: !!(process.env.SMTP_USER || process.env.BREVO_SMTP_USER || process.env.BREVO_USER),
+    SMTP_PASSWORD_PRESENT: !!(process.env.SMTP_PASSWORD || process.env.BREVO_SMTP_PASSWORD || process.env.BREVO_SMTP_KEY || process.env.BREVO_PASSWORD),
+    SMTP_FROM_PRESENT: !!process.env.SMTP_FROM,
+    CONFIGURED_HOST: host,
+    CONFIGURED_PORT: port,
+    CONFIGURED_FROM: from,
+  };
+
+  let verify587Result: { pass: boolean; error?: string; code?: string } = { pass: false };
+  let verify465Result: { pass: boolean; error?: string; code?: string } = { pass: false };
+  let sendMailResult: EmailSendResult = { success: false };
+
+  // Verify 587
+  try {
+    const t587 = createTransporter(587);
+    if (t587) {
+      const v = await t587.verify();
+      verify587Result = { pass: !!v };
+    } else {
+      verify587Result = { pass: false, error: "Transporter null (missing credentials)" };
+    }
+  } catch (err: any) {
+    verify587Result = { pass: false, error: err?.message, code: err?.code };
+  }
+
+  // Verify 465
+  try {
+    const t465 = createTransporter(465);
+    if (t465) {
+      const v = await t465.verify();
+      verify465Result = { pass: !!v };
+    } else {
+      verify465Result = { pass: false, error: "Transporter null (missing credentials)" };
+    }
+  } catch (err: any) {
+    verify465Result = { pass: false, error: err?.message, code: err?.code };
+  }
+
+  // Test SendMail
+  sendMailResult = await executeSendMailDetailed({
+    from,
+    to: DUSKK_NOTIFICATION_EMAIL,
+    replyTo: "duskk.india@gmail.com",
+    subject: "DUSKK Production SMTP Verification Ping",
+    text: "Automated production SMTP diagnostic verification ping.",
+  });
+
+  return {
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "production",
+    envCheck,
+    smtpVerify587: verify587Result,
+    smtpVerify465: verify465Result,
+    sendMailTest: {
+      pass: sendMailResult.success,
+      messageId: sendMailResult.messageId || null,
+      responseCode: sendMailResult.responseCode || null,
+      response: sendMailResult.response || null,
+      error: sendMailResult.error || null,
+      code: sendMailResult.code || null,
+    },
+  };
 }
 
 // Reusable Brand Email Layout Wrapper
@@ -544,7 +673,7 @@ export interface ContactNotificationData {
   submittedAt?: string;
 }
 
-export async function sendContactFormNotification(data: ContactNotificationData): Promise<boolean> {
+export async function sendContactFormNotificationDetailed(data: ContactNotificationData): Promise<EmailSendResult> {
   const timestamp = data.submittedAt || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) + " IST";
   const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
 
@@ -588,13 +717,18 @@ export async function sendContactFormNotification(data: ContactNotificationData)
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  return executeSendMail({
+  return executeSendMailDetailed({
     from: fromAddress,
     to: DUSKK_NOTIFICATION_EMAIL,
     replyTo: data.email,
     subject: `DUSKK Contact Inquiry — ${data.subject}`,
     html: emailHtml,
   });
+}
+
+export async function sendContactFormNotification(data: ContactNotificationData): Promise<boolean> {
+  const result = await sendContactFormNotificationDetailed(data);
+  return result.success;
 }
 
 // ---------------------------------------------------------------------------

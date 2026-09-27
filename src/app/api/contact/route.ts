@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  sendContactFormNotification,
+  sendContactFormNotificationDetailed,
   sendContactFormAcknowledgement,
+  runSmtpDiagnostics,
 } from "@/services/email.service";
+
+// Diagnostic endpoint to inspect live SMTP connectivity on production
+export async function GET() {
+  try {
+    const report = await runSmtpDiagnostics();
+    return NextResponse.json(report, { status: 200 });
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        error: error?.message || "Diagnostic run failed",
+      },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +55,7 @@ export async function POST(req: NextRequest) {
     const submittedAt = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) + " IST";
 
     // 1. Send direct email notification to DUSKK (duskk.india@gmail.com)
-    const emailSent = await sendContactFormNotification({
+    const sendResult = await sendContactFormNotificationDetailed({
       name: trimmedName,
       email: normalizedEmail,
       phone: trimmedPhone,
@@ -48,11 +64,24 @@ export async function POST(req: NextRequest) {
       submittedAt,
     });
 
-    if (!emailSent) {
+    if (!sendResult.success) {
+      console.error("POST /api/contact delivery failure:", {
+        error: sendResult.error,
+        code: sendResult.code,
+        responseCode: sendResult.responseCode,
+        response: sendResult.response,
+      });
+
       return NextResponse.json(
         {
           success: false,
           message: "Unable to send your message. Please try again.",
+          debug: {
+            error: sendResult.error,
+            code: sendResult.code,
+            responseCode: sendResult.responseCode,
+            envCheck: sendResult.envCheck,
+          },
         },
         { status: 500 }
       );
