@@ -148,7 +148,6 @@ export async function POST(req: NextRequest) {
     const newProduct = {
       id: `prod_${Date.now()}`,
       title: prodTitle,
-      name: prodTitle,
       slug: prodSlug,
       sku: prodSku,
       short_description: shortDescription || null,

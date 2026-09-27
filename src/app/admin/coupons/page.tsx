@@ -16,6 +16,7 @@ export default function AdminCouponsPage() {
   const [minOrderValue, setMinOrderValue] = useState("999");
   const [maxDiscount, setMaxDiscount] = useState("");
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const loadCoupons = async () => {
     setLoading(true);
@@ -37,6 +38,7 @@ export default function AdminCouponsPage() {
   const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setErrorMsg("");
     try {
       const res = await fetch("/api/admin/coupons", {
         method: "POST",
@@ -50,14 +52,17 @@ export default function AdminCouponsPage() {
         }),
       });
 
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         setIsModalOpen(false);
         setCode("");
         setDiscountValue("");
         loadCoupons();
+      } else {
+        setErrorMsg(data.message || "Failed to create coupon code");
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setErrorMsg(e.message || "Network error while creating coupon");
     } finally {
       setSaving(false);
     }
@@ -147,6 +152,12 @@ export default function AdminCouponsPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {errorMsg && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
+                {errorMsg}
+              </div>
+            )}
 
             <form onSubmit={handleCreateCoupon} className="p-6 space-y-3 text-xs">
               <div>

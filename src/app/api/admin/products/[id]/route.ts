@@ -72,7 +72,6 @@ export async function PUT(
     const prodTitle = title || name;
     if (prodTitle) {
       updates.title = prodTitle;
-      updates.name = prodTitle;
     }
     if (shortDescription !== undefined) updates.short_description = shortDescription;
     if (description !== undefined) updates.description = description;

@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function uploadFileToStorage(
-  bucket: "product-images" | "banners" | "review-images",
+  bucket: "product-images" | "banners" | "review-images" | "category-images",
   path: string,
   fileBuffer: Buffer,
   contentType: string
