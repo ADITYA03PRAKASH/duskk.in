@@ -37,10 +37,18 @@ function createTransporter(targetPort?: number): nodemailer.Transporter | null {
 
   const user = (
     process.env.SMTP_USER ||
+    process.env.SMTP_USERNAME ||
+    process.env.SMTP_LOGIN ||
     process.env.BREVO_SMTP_USER ||
     process.env.BREVO_USER ||
+    process.env.BREVO_LOGIN ||
+    process.env.BREVO_SMTP_LOGIN ||
+    process.env.SENDINBLUE_USER ||
+    process.env.SENDINBLUE_LOGIN ||
     process.env.EMAIL_SERVER_USER ||
     process.env.EMAIL_USER ||
+    process.env.MAIL_USER ||
+    process.env.MAIL_USERNAME ||
     ""
   )
     .replace(/^["']|["']$/g, "")
@@ -48,11 +56,16 @@ function createTransporter(targetPort?: number): nodemailer.Transporter | null {
 
   const pass = (
     process.env.SMTP_PASSWORD ||
+    process.env.SMTP_PASS ||
     process.env.BREVO_SMTP_PASSWORD ||
     process.env.BREVO_SMTP_KEY ||
     process.env.BREVO_PASSWORD ||
+    process.env.BREVO_API_KEY ||
+    process.env.SENDINBLUE_PASSWORD ||
+    process.env.SENDINBLUE_KEY ||
     process.env.EMAIL_SERVER_PASSWORD ||
     process.env.EMAIL_PASSWORD ||
+    process.env.MAIL_PASSWORD ||
     ""
   )
     .replace(/^["']|["']$/g, "")
@@ -180,11 +193,11 @@ export async function runSmtpDiagnostics() {
   const from = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
 
   const envCheck = {
-    SMTP_HOST_PRESENT: !!process.env.SMTP_HOST,
-    SMTP_PORT_PRESENT: !!process.env.SMTP_PORT,
-    SMTP_USER_PRESENT: !!(process.env.SMTP_USER || process.env.BREVO_SMTP_USER || process.env.BREVO_USER),
-    SMTP_PASSWORD_PRESENT: !!(process.env.SMTP_PASSWORD || process.env.BREVO_SMTP_PASSWORD || process.env.BREVO_SMTP_KEY || process.env.BREVO_PASSWORD),
-    SMTP_FROM_PRESENT: !!process.env.SMTP_FROM,
+    SMTP_HOST_PRESENT: !!(process.env.SMTP_HOST || process.env.BREVO_SMTP_HOST),
+    SMTP_PORT_PRESENT: !!(process.env.SMTP_PORT || process.env.BREVO_SMTP_PORT),
+    SMTP_USER_PRESENT: !!(process.env.SMTP_USER || process.env.SMTP_USERNAME || process.env.SMTP_LOGIN || process.env.BREVO_SMTP_USER || process.env.BREVO_USER || process.env.BREVO_LOGIN || process.env.BREVO_SMTP_LOGIN || process.env.SENDINBLUE_USER || process.env.SENDINBLUE_LOGIN || process.env.EMAIL_SERVER_USER || process.env.EMAIL_USER || process.env.MAIL_USER || process.env.MAIL_USERNAME),
+    SMTP_PASSWORD_PRESENT: !!(process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.BREVO_SMTP_PASSWORD || process.env.BREVO_SMTP_KEY || process.env.BREVO_PASSWORD || process.env.BREVO_API_KEY || process.env.SENDINBLUE_PASSWORD || process.env.SENDINBLUE_KEY || process.env.EMAIL_SERVER_PASSWORD || process.env.EMAIL_PASSWORD || process.env.MAIL_PASSWORD),
+    SMTP_FROM_PRESENT: !!(process.env.SMTP_FROM || process.env.BREVO_SMTP_FROM),
     CONFIGURED_HOST: host,
     CONFIGURED_PORT: port,
     CONFIGURED_FROM: from,
