@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unable to dispatch your message at this moment. Please email us directly at duskk.india@gmail.com or call +91 75034 62516.",
+          message: "Unable to send your message. Please try again.",
         },
         { status: 500 }
       );

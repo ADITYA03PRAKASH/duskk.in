@@ -1,11 +1,6 @@
 import nodemailer from "nodemailer";
 import { formatPrice } from "@/lib/utils";
 
-const SMTP_HOST = process.env.SMTP_HOST || "smtp-relay.brevo.com";
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASSWORD = process.env.SMTP_PASSWORD || "";
-const SMTP_FROM = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
 const DUSKK_NOTIFICATION_EMAIL = "duskk.india@gmail.com";
 
 // Safe site URL helper (strictly avoids localhost in customer-facing emails)
@@ -17,20 +12,36 @@ function getSiteUrl(): string {
   return url.replace(/\/$/, "");
 }
 
-const transporter =
-  SMTP_USER && SMTP_PASSWORD && !SMTP_PASSWORD.includes("mock")
-    ? nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: false, // TLS via port 587 STARTTLS
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASSWORD,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-      })
-    : null;
+// Runtime Transporter Getter with connection pooling
+let cachedTransporter: nodemailer.Transporter | null = null;
+
+function getTransporter(): nodemailer.Transporter | null {
+  const host = process.env.SMTP_HOST || "smtp-relay.brevo.com";
+  const port = parseInt(process.env.SMTP_PORT || "587", 10);
+  const user = process.env.SMTP_USER || "";
+  const pass = process.env.SMTP_PASSWORD || "";
+
+  if (!user || !pass || pass.includes("mock") || pass.trim() === "") {
+    console.error("SMTP Error: SMTP_USER or SMTP_PASSWORD is not configured in the environment.");
+    return null;
+  }
+
+  if (!cachedTransporter) {
+    cachedTransporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: false, // Port 587 uses STARTTLS
+      auth: {
+        user,
+        pass,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+    });
+  }
+
+  return cachedTransporter;
+}
 
 // Reusable Brand Email Layout Wrapper
 function buildEmailTemplate(contentHtml: string): string {
@@ -105,7 +116,14 @@ export interface OrderEmailData {
 }
 
 export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<boolean> {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.error("sendOrderConfirmationEmail: Transporter unavailable");
+    return false;
+  }
+
   const siteUrl = getSiteUrl();
+  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
 
   const itemsHtml = data.items
     .map(
@@ -180,23 +198,18 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: data.customerEmail,
-        subject: `DUSKK Order Confirmation — ${data.orderNumber}`,
-        html: emailHtml,
-      });
-      console.log(`📧 Order confirmation email sent to ${data.customerEmail} for #${data.orderNumber}`);
-      return true;
-    } catch (err: any) {
-      console.warn("SMTP sendOrderConfirmationEmail failed safely:", err?.message || "Unknown error");
-      return false;
-    }
-  } else {
-    console.log(`📧 [MOCK EMAIL SERVICE] Order confirmation for #${data.orderNumber}`);
+  try {
+    await transporter.sendMail({
+      from: fromAddress,
+      to: data.customerEmail,
+      subject: `DUSKK Order Confirmation — ${data.orderNumber}`,
+      html: emailHtml,
+    });
+    console.log(`📧 Order confirmation email sent to ${data.customerEmail} for #${data.orderNumber}`);
     return true;
+  } catch (err: any) {
+    console.error("SMTP sendOrderConfirmationEmail failed:", err?.message || "Unknown error");
+    return false;
   }
 }
 
@@ -219,7 +232,14 @@ export interface OrderStatusEmailData {
 }
 
 export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Promise<boolean> {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.error("sendOrderStatusUpdateEmail: Transporter unavailable");
+    return false;
+  }
+
   const siteUrl = getSiteUrl();
+  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
   let subject = `Update on your DUSKK Order #${data.orderNumber}`;
   let statusBadge = data.status;
   let statusBadgeColor = "#0F0F0F";
@@ -371,23 +391,18 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: data.customerEmail,
-        subject,
-        html: emailHtml,
-      });
-      console.log(`📧 Status update (${normStatus}) sent to ${data.customerEmail} for #${data.orderNumber}`);
-      return true;
-    } catch (err: any) {
-      console.warn(`SMTP sendOrderStatusUpdateEmail (${normStatus}) failed safely:`, err?.message || "Unknown error");
-      return false;
-    }
-  } else {
-    console.log(`📧 [MOCK EMAIL SERVICE] Status update (${normStatus}) for #${data.orderNumber}`);
+  try {
+    await transporter.sendMail({
+      from: fromAddress,
+      to: data.customerEmail,
+      subject,
+      html: emailHtml,
+    });
+    console.log(`📧 Status update (${normStatus}) sent to ${data.customerEmail} for #${data.orderNumber}`);
     return true;
+  } catch (err: any) {
+    console.error(`SMTP sendOrderStatusUpdateEmail (${normStatus}) failed:`, err?.message || "Unknown error");
+    return false;
   }
 }
 
@@ -404,6 +419,13 @@ export interface RefundEmailData {
 }
 
 export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.error("sendRefundEmail: Transporter unavailable");
+    return false;
+  }
+
+  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
   const subject = `DUSKK Refund Confirmation — Order #${data.orderNumber}`;
 
   const bodyContent = `
@@ -460,23 +482,18 @@ export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: data.customerEmail,
-        subject,
-        html: emailHtml,
-      });
-      console.log(`📧 Refund confirmation email sent to ${data.customerEmail} for #${data.orderNumber}`);
-      return true;
-    } catch (err: any) {
-      console.warn("SMTP sendRefundEmail failed safely:", err?.message || "Unknown error");
-      return false;
-    }
-  } else {
-    console.log(`📧 [MOCK EMAIL SERVICE] Refund confirmation for #${data.orderNumber}`);
+  try {
+    await transporter.sendMail({
+      from: fromAddress,
+      to: data.customerEmail,
+      subject,
+      html: emailHtml,
+    });
+    console.log(`📧 Refund confirmation email sent to ${data.customerEmail} for #${data.orderNumber}`);
     return true;
+  } catch (err: any) {
+    console.error("SMTP sendRefundEmail failed:", err?.message || "Unknown error");
+    return false;
   }
 }
 
@@ -493,7 +510,14 @@ export interface ContactNotificationData {
 }
 
 export async function sendContactFormNotification(data: ContactNotificationData): Promise<boolean> {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.error("sendContactFormNotification: Transporter unavailable");
+    return false;
+  }
+
   const timestamp = data.submittedAt || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) + " IST";
+  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
 
   const bodyContent = `
     <div style="margin-bottom: 20px;">
@@ -535,23 +559,20 @@ export async function sendContactFormNotification(data: ContactNotificationData)
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: DUSKK_NOTIFICATION_EMAIL,
-        replyTo: data.email,
-        subject: `DUSKK Contact Inquiry — ${data.subject}`,
-        html: emailHtml,
-      });
-      console.log(`📧 Contact form notification delivered to ${DUSKK_NOTIFICATION_EMAIL} from ${data.email}`);
-      return true;
-    } catch (err: any) {
-      console.warn("SMTP sendContactFormNotification failed safely:", err?.message || "Unknown error");
-      return false;
-    }
+  try {
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to: DUSKK_NOTIFICATION_EMAIL,
+      replyTo: data.email,
+      subject: `DUSKK Contact Inquiry — ${data.subject}`,
+      html: emailHtml,
+    });
+    console.log(`📧 Contact form notification delivered to ${DUSKK_NOTIFICATION_EMAIL} from ${data.email} | messageId: ${info.messageId}`);
+    return true;
+  } catch (err: any) {
+    console.error("SMTP sendContactFormNotification failed:", err?.message || "Unknown error");
+    return false;
   }
-  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -565,6 +586,12 @@ export interface ContactAcknowledgementData {
 }
 
 export async function sendContactFormAcknowledgement(data: ContactAcknowledgementData): Promise<boolean> {
+  const transporter = getTransporter();
+  if (!transporter) {
+    return false;
+  }
+
+  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
   const subject = `We received your message — DUSKK`;
 
   const bodyContent = `
@@ -587,20 +614,17 @@ export async function sendContactFormAcknowledgement(data: ContactAcknowledgemen
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: SMTP_FROM,
-        to: data.email,
-        subject,
-        html: emailHtml,
-      });
-      console.log(`📧 Contact form acknowledgement sent to customer: ${data.email}`);
-      return true;
-    } catch (err: any) {
-      console.warn("SMTP sendContactFormAcknowledgement failed safely:", err?.message || "Unknown error");
-      return false;
-    }
+  try {
+    await transporter.sendMail({
+      from: fromAddress,
+      to: data.email,
+      subject,
+      html: emailHtml,
+    });
+    console.log(`📧 Contact form acknowledgement sent to customer: ${data.email}`);
+    return true;
+  } catch (err: any) {
+    console.warn("SMTP sendContactFormAcknowledgement failed safely:", err?.message || "Unknown error");
+    return false;
   }
-  return true;
 }
