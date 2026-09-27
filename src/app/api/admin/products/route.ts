@@ -145,20 +145,42 @@ export async function POST(req: NextRequest) {
       color: color || "Gold",
     };
 
-    const numMrp = mrp !== undefined && mrp !== "" ? Number(mrp) : undefined;
-    const numPrice = price !== undefined && price !== "" ? Number(price) : 0;
+    const numMrp = mrp !== undefined && mrp !== null && mrp !== "" ? Number(mrp) : undefined;
+    const numPrice = price !== undefined && price !== null && price !== "" ? Number(price) : undefined;
+
+    if (numPrice === undefined || isNaN(numPrice)) {
+      return NextResponse.json({ success: false, message: "A valid selling price is required." }, { status: 400 });
+    }
+
+    if (numPrice < 0) {
+      return NextResponse.json({ success: false, message: "Selling price cannot be negative." }, { status: 400 });
+    }
+
+    if (numMrp !== undefined && (isNaN(numMrp) || numMrp < 0)) {
+      return NextResponse.json({ success: false, message: "MRP cannot be negative." }, { status: 400 });
+    }
 
     let finalBasePrice = numPrice;
     let finalSalePrice: number | null = null;
 
     if (numMrp !== undefined) {
-      if (numMrp > numPrice) {
+      if (numPrice > numMrp) {
+        return NextResponse.json(
+          { success: false, message: "Selling Price cannot be higher than MRP." },
+          { status: 400 }
+        );
+      } else if (numPrice === numMrp) {
+        finalBasePrice = numMrp;
+        finalSalePrice = null;
+      } else {
+        // Selling Price < MRP
         finalBasePrice = numMrp;
         finalSalePrice = numPrice;
-      } else {
-        finalBasePrice = numPrice;
-        finalSalePrice = null;
       }
+    } else {
+      // Selling Price only, with MRP empty
+      finalBasePrice = numPrice;
+      finalSalePrice = null;
     }
 
     try {

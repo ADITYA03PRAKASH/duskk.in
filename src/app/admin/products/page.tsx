@@ -147,14 +147,20 @@ export default function AdminProductsPage() {
     const numPrice = price !== "" ? Number(price) : undefined;
     const numMrp = mrp !== "" ? Number(mrp) : undefined;
 
-    if (numPrice !== undefined && numPrice < 0) {
+    if (numPrice !== undefined && (isNaN(numPrice) || numPrice < 0)) {
       setErrorMsg("Selling price cannot be negative.");
       setSaving(false);
       return;
     }
 
-    if (numPrice !== undefined && numMrp !== undefined && numMrp > 0 && numPrice > numMrp) {
-      setErrorMsg(`Selling Price (₹${price}) cannot exceed MRP (₹${mrp}). In retail, MRP is the original maximum price and Selling Price is the discounted offer price.`);
+    if (numMrp !== undefined && (isNaN(numMrp) || numMrp < 0)) {
+      setErrorMsg("MRP cannot be negative.");
+      setSaving(false);
+      return;
+    }
+
+    if (numPrice !== undefined && numMrp !== undefined && numPrice > numMrp) {
+      setErrorMsg("Selling Price cannot be higher than MRP.");
       setSaving(false);
       return;
     }
@@ -164,7 +170,7 @@ export default function AdminProductsPage() {
       name,
       categoryId,
       price,
-      mrp: mrp || price,
+      mrp: mrp ? mrp : undefined,
       discount,
       stockQuantity,
       material,
@@ -427,13 +433,7 @@ export default function AdminProductsPage() {
                     type="number"
                     required
                     value={price}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPrice(val);
-                      if (!mrp || (val && Number(mrp) < Number(val))) {
-                        setMrp(val);
-                      }
-                    }}
+                    onChange={(e) => setPrice(e.target.value)}
                     placeholder="2499"
                     className="w-full px-3 py-2 border border-duskk-300 rounded"
                   />

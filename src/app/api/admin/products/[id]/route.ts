@@ -93,30 +93,49 @@ export async function PUT(
 
     if (subcategoryId !== undefined) updates.subcategory_id = subcategoryId || null;
 
-    const numMrp = mrp !== undefined && mrp !== "" ? Number(mrp) : undefined;
-    const numPrice = price !== undefined && price !== "" ? Number(price) : undefined;
+    const numMrp = mrp !== undefined && mrp !== null && mrp !== "" ? Number(mrp) : undefined;
+    const numPrice = price !== undefined && price !== null && price !== "" ? Number(price) : undefined;
 
     if (numPrice !== undefined || numMrp !== undefined) {
-      if (numPrice !== undefined && numPrice < 0) {
+      if (numPrice !== undefined && (isNaN(numPrice) || numPrice < 0)) {
         return NextResponse.json({ success: false, message: "Selling price cannot be negative." }, { status: 400 });
       }
-      if (numMrp !== undefined && numMrp < 0) {
+      if (numMrp !== undefined && (isNaN(numMrp) || numMrp < 0)) {
         return NextResponse.json({ success: false, message: "MRP cannot be negative." }, { status: 400 });
       }
 
       if (numMrp !== undefined && numPrice !== undefined) {
-        if (numMrp >= numPrice) {
+        if (numPrice > numMrp) {
+          return NextResponse.json(
+            { success: false, message: "Selling Price cannot be higher than MRP." },
+            { status: 400 }
+          );
+        } else if (numPrice === numMrp) {
           updates.base_price = numMrp;
-          updates.sale_price = numMrp > numPrice ? numPrice : null;
-        } else {
-          // If selling price exceeds MRP, elevate base_price to selling price so products_check constraint is never violated
-          updates.base_price = numPrice;
           updates.sale_price = null;
+        } else {
+          // Selling Price < MRP
+          updates.base_price = numMrp;
+          updates.sale_price = numPrice;
         }
       } else if (numPrice !== undefined) {
+        // Selling Price only, with MRP empty
         updates.base_price = numPrice;
         updates.sale_price = null;
       } else if (numMrp !== undefined) {
+        // Only MRP updated
+        const { data: currentProd } = await supabaseAdmin
+          .from("products")
+          .select("sale_price")
+          .eq("id", params.id)
+          .maybeSingle();
+
+        if (currentProd?.sale_price !== null && currentProd?.sale_price !== undefined && Number(currentProd.sale_price) > numMrp) {
+          return NextResponse.json(
+            { success: false, message: "Selling Price cannot be higher than MRP." },
+            { status: 400 }
+          );
+        }
         updates.base_price = numMrp;
       }
     }
