@@ -4,7 +4,11 @@ import { CheckoutPayload, OrderStatus, OrderTrackResult } from "@/types";
 import { validateAndCalculateCart } from "./pricing.service";
 import { findOrCreateCustomer, saveCustomerAddress } from "./customer.service";
 import { createRazorpayOrder } from "./payment.service";
-import { sendOrderConfirmationEmail, sendOrderStatusUpdateEmail } from "./email.service";
+import {
+  sendOrderConfirmationEmail,
+  sendOrderStatusUpdateEmail,
+  sendRefundEmail,
+} from "./email.service";
 
 export async function initiateCheckoutOrder(
   payload: CheckoutPayload,
@@ -267,7 +271,7 @@ export async function updateOrderStatus(
   try {
     const { data: currentOrder, error: fetchErr } = await supabaseAdmin
       .from("orders")
-      .select("status, order_number, customer_snapshot")
+      .select("id, status, order_number, grand_total, customer_snapshot, payments (id, razorpay_payment_id, status)")
       .eq("id", orderId)
       .single();
 
@@ -276,6 +280,11 @@ export async function updateOrderStatus(
     }
 
     const oldStatus = currentOrder.status;
+
+    // Duplicate prevention: only send notifications and log transition when status actually changes
+    if (oldStatus === newStatus) {
+      return { success: true, message: "Order status is already up to date" };
+    }
 
     let fullComment = comment || `Status updated from ${oldStatus} to ${newStatus}`;
     if (trackingInfo?.courierName || trackingInfo?.trackingNumber) {
@@ -319,18 +328,34 @@ export async function updateOrderStatus(
     const customerName = `${customerSnapshot?.first_name || ""} ${customerSnapshot?.last_name || ""}`.trim() || "Customer";
     const customerEmail = customerSnapshot?.email;
 
-    if (["SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(newStatus) && customerEmail) {
-      sendOrderStatusUpdateEmail(
-        currentOrder.order_number,
-        customerName,
-        customerEmail,
-        newStatus
-      ).catch(console.error);
+    if (customerEmail) {
+      if (newStatus === "REFUNDED") {
+        const paymentsList = currentOrder.payments as any[];
+        const refundRef = paymentsList?.[0]?.razorpay_payment_id || comment || undefined;
+        sendRefundEmail({
+          orderNumber: currentOrder.order_number,
+          customerName,
+          customerEmail,
+          refundAmount: Number(currentOrder.grand_total || 0),
+          refundReference: refundRef,
+          refundStatus: "COMPLETED",
+        }).catch((err) => console.warn("Refund email dispatch error (non-fatal):", err?.message));
+      } else if (["SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(newStatus)) {
+        sendOrderStatusUpdateEmail({
+          orderNumber: currentOrder.order_number,
+          customerName,
+          customerEmail,
+          status: newStatus,
+          amount: Number(currentOrder.grand_total || 0),
+          reason: comment,
+          trackingInfo,
+        }).catch((err) => console.warn("Status update email dispatch error (non-fatal):", err?.message));
+      }
     }
 
     return { success: true };
   } catch (err: any) {
-    console.warn("updateOrderStatus caught:", err);
+    console.warn("updateOrderStatus caught error:", err?.message || "Unknown error");
     return { success: true };
   }
 }
