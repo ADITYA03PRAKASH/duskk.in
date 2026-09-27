@@ -12,35 +12,109 @@ function getSiteUrl(): string {
   return url.replace(/\/$/, "");
 }
 
-// Runtime Transporter Getter with connection pooling
-let cachedTransporter: nodemailer.Transporter | null = null;
+// Serverless-safe Transporter Creator (Fresh socket per request to avoid stale pool disconnects)
+function createTransporter(targetPort?: number): nodemailer.Transporter | null {
+  const host = (
+    process.env.SMTP_HOST ||
+    process.env.BREVO_SMTP_HOST ||
+    "smtp-relay.brevo.com"
+  )
+    .replace(/^["']|["']$/g, "")
+    .trim();
 
-function getTransporter(): nodemailer.Transporter | null {
-  const host = process.env.SMTP_HOST || "smtp-relay.brevo.com";
-  const port = parseInt(process.env.SMTP_PORT || "587", 10);
-  const user = process.env.SMTP_USER || "";
-  const pass = process.env.SMTP_PASSWORD || "";
+  const port = parseInt(
+    (
+      targetPort ||
+      process.env.SMTP_PORT ||
+      process.env.BREVO_SMTP_PORT ||
+      "587"
+    )
+      .toString()
+      .replace(/^["']|["']$/g, "")
+      .trim(),
+    10
+  );
+
+  const user = (
+    process.env.SMTP_USER ||
+    process.env.BREVO_SMTP_USER ||
+    process.env.BREVO_USER ||
+    process.env.EMAIL_SERVER_USER ||
+    process.env.EMAIL_USER ||
+    ""
+  )
+    .replace(/^["']|["']$/g, "")
+    .trim();
+
+  const pass = (
+    process.env.SMTP_PASSWORD ||
+    process.env.BREVO_SMTP_PASSWORD ||
+    process.env.BREVO_SMTP_KEY ||
+    process.env.BREVO_PASSWORD ||
+    process.env.EMAIL_SERVER_PASSWORD ||
+    process.env.EMAIL_PASSWORD ||
+    ""
+  )
+    .replace(/^["']|["']$/g, "")
+    .trim();
 
   if (!user || !pass || pass.includes("mock") || pass.trim() === "") {
     console.error("SMTP Error: SMTP_USER or SMTP_PASSWORD is not configured in the environment.");
     return null;
   }
 
-  if (!cachedTransporter) {
-    cachedTransporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: false, // Port 587 uses STARTTLS
-      auth: {
-        user,
-        pass,
-      },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-    });
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465, // SSL on 465, STARTTLS on 587
+    auth: {
+      user,
+      pass,
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    tls: {
+      rejectUnauthorized: true,
+    },
+  });
+}
+
+// Resilient SendMail with Port 587 -> Port 465 fallback
+async function executeSendMail(mailOptions: nodemailer.SendMailOptions): Promise<boolean> {
+  const preferredPort = parseInt(
+    (process.env.SMTP_PORT || "587").toString().replace(/^["']|["']$/g, "").trim(),
+    10
+  );
+  const fallbackPort = preferredPort === 465 ? 587 : 465;
+
+  // Attempt Primary Port
+  let transporter = createTransporter(preferredPort);
+  if (!transporter) {
+    return false;
   }
 
-  return cachedTransporter;
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Email delivered via port ${preferredPort} | messageId: ${info.messageId}`);
+    return true;
+  } catch (primaryErr: any) {
+    console.warn(`SMTP primary port ${preferredPort} failed (${primaryErr?.code || primaryErr?.message}), attempting port ${fallbackPort} fallback...`);
+
+    // Fallback to Alternate Port (e.g. 465 SSL/TLS if 587 STARTTLS was blocked)
+    try {
+      transporter = createTransporter(fallbackPort);
+      if (!transporter) {
+        return false;
+      }
+      const fallbackInfo = await transporter.sendMail(mailOptions);
+      console.log(`📧 Email delivered via fallback port ${fallbackPort} | messageId: ${fallbackInfo.messageId}`);
+      return true;
+    } catch (fallbackErr: any) {
+      console.error(`SMTP delivery failed on both ports (${preferredPort}/${fallbackPort}):`, fallbackErr?.message || "Unknown error");
+      return false;
+    }
+  }
 }
 
 // Reusable Brand Email Layout Wrapper
@@ -116,14 +190,8 @@ export interface OrderEmailData {
 }
 
 export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<boolean> {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.error("sendOrderConfirmationEmail: Transporter unavailable");
-    return false;
-  }
-
   const siteUrl = getSiteUrl();
-  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
 
   const itemsHtml = data.items
     .map(
@@ -198,19 +266,12 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  try {
-    await transporter.sendMail({
-      from: fromAddress,
-      to: data.customerEmail,
-      subject: `DUSKK Order Confirmation — ${data.orderNumber}`,
-      html: emailHtml,
-    });
-    console.log(`📧 Order confirmation email sent to ${data.customerEmail} for #${data.orderNumber}`);
-    return true;
-  } catch (err: any) {
-    console.error("SMTP sendOrderConfirmationEmail failed:", err?.message || "Unknown error");
-    return false;
-  }
+  return executeSendMail({
+    from: fromAddress,
+    to: data.customerEmail,
+    subject: `DUSKK Order Confirmation — ${data.orderNumber}`,
+    html: emailHtml,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -232,14 +293,8 @@ export interface OrderStatusEmailData {
 }
 
 export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Promise<boolean> {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.error("sendOrderStatusUpdateEmail: Transporter unavailable");
-    return false;
-  }
-
   const siteUrl = getSiteUrl();
-  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
   let subject = `Update on your DUSKK Order #${data.orderNumber}`;
   let statusBadge = data.status;
   let statusBadgeColor = "#0F0F0F";
@@ -391,19 +446,12 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  try {
-    await transporter.sendMail({
-      from: fromAddress,
-      to: data.customerEmail,
-      subject,
-      html: emailHtml,
-    });
-    console.log(`📧 Status update (${normStatus}) sent to ${data.customerEmail} for #${data.orderNumber}`);
-    return true;
-  } catch (err: any) {
-    console.error(`SMTP sendOrderStatusUpdateEmail (${normStatus}) failed:`, err?.message || "Unknown error");
-    return false;
-  }
+  return executeSendMail({
+    from: fromAddress,
+    to: data.customerEmail,
+    subject,
+    html: emailHtml,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -419,13 +467,7 @@ export interface RefundEmailData {
 }
 
 export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.error("sendRefundEmail: Transporter unavailable");
-    return false;
-  }
-
-  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
   const subject = `DUSKK Refund Confirmation — Order #${data.orderNumber}`;
 
   const bodyContent = `
@@ -482,19 +524,12 @@ export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  try {
-    await transporter.sendMail({
-      from: fromAddress,
-      to: data.customerEmail,
-      subject,
-      html: emailHtml,
-    });
-    console.log(`📧 Refund confirmation email sent to ${data.customerEmail} for #${data.orderNumber}`);
-    return true;
-  } catch (err: any) {
-    console.error("SMTP sendRefundEmail failed:", err?.message || "Unknown error");
-    return false;
-  }
+  return executeSendMail({
+    from: fromAddress,
+    to: data.customerEmail,
+    subject,
+    html: emailHtml,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -510,14 +545,8 @@ export interface ContactNotificationData {
 }
 
 export async function sendContactFormNotification(data: ContactNotificationData): Promise<boolean> {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.error("sendContactFormNotification: Transporter unavailable");
-    return false;
-  }
-
   const timestamp = data.submittedAt || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) + " IST";
-  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
 
   const bodyContent = `
     <div style="margin-bottom: 20px;">
@@ -559,20 +588,13 @@ export async function sendContactFormNotification(data: ContactNotificationData)
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  try {
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      to: DUSKK_NOTIFICATION_EMAIL,
-      replyTo: data.email,
-      subject: `DUSKK Contact Inquiry — ${data.subject}`,
-      html: emailHtml,
-    });
-    console.log(`📧 Contact form notification delivered to ${DUSKK_NOTIFICATION_EMAIL} from ${data.email} | messageId: ${info.messageId}`);
-    return true;
-  } catch (err: any) {
-    console.error("SMTP sendContactFormNotification failed:", err?.message || "Unknown error");
-    return false;
-  }
+  return executeSendMail({
+    from: fromAddress,
+    to: DUSKK_NOTIFICATION_EMAIL,
+    replyTo: data.email,
+    subject: `DUSKK Contact Inquiry — ${data.subject}`,
+    html: emailHtml,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -586,12 +608,7 @@ export interface ContactAcknowledgementData {
 }
 
 export async function sendContactFormAcknowledgement(data: ContactAcknowledgementData): Promise<boolean> {
-  const transporter = getTransporter();
-  if (!transporter) {
-    return false;
-  }
-
-  const fromAddress = process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>";
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
   const subject = `We received your message — DUSKK`;
 
   const bodyContent = `
@@ -614,17 +631,10 @@ export async function sendContactFormAcknowledgement(data: ContactAcknowledgemen
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  try {
-    await transporter.sendMail({
-      from: fromAddress,
-      to: data.email,
-      subject,
-      html: emailHtml,
-    });
-    console.log(`📧 Contact form acknowledgement sent to customer: ${data.email}`);
-    return true;
-  } catch (err: any) {
-    console.warn("SMTP sendContactFormAcknowledgement failed safely:", err?.message || "Unknown error");
-    return false;
-  }
+  return executeSendMail({
+    from: fromAddress,
+    to: data.email,
+    subject,
+    html: emailHtml,
+  });
 }
