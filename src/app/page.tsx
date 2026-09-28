@@ -4,17 +4,20 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
 import { getProducts, getCategories } from "@/services/catalog.service";
-import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award } from "lucide-react";
+import { getPublicTestimonials, getTestimonialSectionSettings } from "@/services/testimonials.service";
+import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award, ExternalLink } from "lucide-react";
 
 import { Hero } from "@/components/home/Hero";
 
 export const revalidate = 60; // ISR cache 60 seconds
 
 export default async function HomePage() {
-  const [categories, featuredResult, bestSellersResult] = await Promise.all([
+  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection] = await Promise.all([
     getCategories(),
     getProducts({ limit: 4, featured: true }),
     getProducts({ limit: 4, bestSeller: true }),
+    getPublicTestimonials(),
+    getTestimonialSectionSettings(),
   ]);
 
   const featuredProducts = featuredResult.products;
@@ -246,64 +249,94 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* 8. TESTIMONIALS */}
-        <section className="py-20 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
-              CUSTOMER EXPERIENCES
-            </span>
-            <h2 className="font-serif text-3xl sm:text-4xl text-duskk-900 font-medium mb-12">
-              Loved By Modern Muses
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-              <div className="p-6 bg-duskk-50 border border-duskk-200 rounded space-y-3">
-                <div className="flex text-amber-500">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-current" />
-                  ))}
-                </div>
-                <p className="text-xs sm:text-sm text-duskk-700 italic leading-relaxed">
-                  &ldquo;The baroque pearls have the most dreamy, subtle lustre. Checkout was lightning fast without making me create passwords or wait for SMS codes!&rdquo;
+        {/* 8. TESTIMONIALS / CUSTOMER EXPERIENCES */}
+        {testimonials && testimonials.length > 0 && (
+          <section className="py-20 bg-white">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
+                {testimonialSection.eyebrow || "CUSTOMER EXPERIENCES"}
+              </span>
+              <h2 className="font-serif text-3xl sm:text-4xl text-duskk-900 font-medium mb-4">
+                {testimonialSection.heading || "Loved By Modern Muses"}
+              </h2>
+              {testimonialSection.description ? (
+                <p className="text-xs sm:text-sm text-duskk-600 max-w-lg mx-auto mb-10">
+                  {testimonialSection.description}
                 </p>
-                <div className="pt-2 border-t border-duskk-200">
-                  <h4 className="text-xs font-bold text-duskk-900">Natasha Kulkarni</h4>
-                  <span className="text-[11px] text-duskk-500">Mumbai &bull; Verified Buyer</span>
-                </div>
-              </div>
+              ) : (
+                <div className="mb-12" />
+              )}
 
-              <div className="p-6 bg-duskk-50 border border-duskk-200 rounded space-y-3">
-                <div className="flex text-amber-500">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-current" />
-                  ))}
-                </div>
-                <p className="text-xs sm:text-sm text-duskk-700 italic leading-relaxed">
-                  &ldquo;Ordered the Celeste layered necklace and it arrived in Delhi in 2 days. The velvet jewelry box made me feel like I purchased fine diamonds.&rdquo;
-                </p>
-                <div className="pt-2 border-t border-duskk-200">
-                  <h4 className="text-xs font-bold text-duskk-900">Rhea Sen</h4>
-                  <span className="text-[11px] text-duskk-500">New Delhi &bull; Verified Buyer</span>
-                </div>
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                {testimonials.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-6 bg-duskk-50 border border-duskk-200 rounded space-y-3 flex flex-col justify-between shadow-sm"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex text-amber-500">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-4 h-4 ${
+                                i < item.rating ? "fill-current" : "text-duskk-200"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        {item.source_type && (
+                          <span className="text-[10px] uppercase font-mono text-duskk-500 bg-duskk-100 px-2 py-0.5 rounded">
+                            {item.source_type}
+                          </span>
+                        )}
+                      </div>
 
-              <div className="p-6 bg-duskk-50 border border-duskk-200 rounded space-y-3">
-                <div className="flex text-amber-500">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-current" />
-                  ))}
-                </div>
-                <p className="text-xs sm:text-sm text-duskk-700 italic leading-relaxed">
-                  &ldquo;Finally a luxury Indian brand that respects user experience! Added to cart, entered my address, paid via UPI in 30 seconds. 10/10 quality.&rdquo;
-                </p>
-                <div className="pt-2 border-t border-duskk-200">
-                  <h4 className="text-xs font-bold text-duskk-900">Tanvi Agarwal</h4>
-                  <span className="text-[11px] text-duskk-500">Bengaluru &bull; Verified Buyer</span>
-                </div>
+                      <p className="text-xs sm:text-sm text-duskk-700 italic leading-relaxed">
+                        &ldquo;{item.review_text}&rdquo;
+                      </p>
+                    </div>
+
+                    <div className="pt-3 border-t border-duskk-200 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-duskk-900 font-serif">
+                            {item.customer_name}
+                          </h4>
+                          <span className="text-[11px] text-duskk-500">
+                            {item.location ? `${item.location}` : ""}
+                            {item.is_verified_buyer
+                              ? `${item.location ? " • " : ""}Verified Buyer`
+                              : ""}
+                          </span>
+                        </div>
+                        {item.avatar_url && (
+                          <img
+                            src={item.avatar_url}
+                            alt={item.customer_name}
+                            className="w-8 h-8 rounded-full object-cover border border-duskk-200"
+                          />
+                        )}
+                      </div>
+
+                      {item.source_url && (
+                        <a
+                          href={item.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-duskk-gold hover:underline inline-flex items-center gap-1 mt-1 font-medium"
+                        >
+                          <span>View Original Review</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
       </main>
 
       <Footer />

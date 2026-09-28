@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from "lucide-react";
+import { Lock, Mail, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -10,13 +10,18 @@ export default function AdminLoginPage() {
   const isLocalAdmin = pathname.startsWith("/admin");
   const targetDashboard = isLocalAdmin ? "/admin" : "/";
 
-  const [email, setEmail] = useState("admin@duskk.in");
-  const [password, setPassword] = useState("DuskkAdmin2026!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim() || !password) {
+      setError("Please enter your admin email and password.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -24,7 +29,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       const data = await res.json();
@@ -32,7 +37,7 @@ export default function AdminLoginPage() {
         router.push(targetDashboard);
         router.refresh();
       } else {
-        setError(data.message || "Invalid administrative credentials");
+        setError(data.message || "Invalid administrative credentials.");
       }
     } catch {
       setError("Unable to connect to authentication service.");
@@ -56,11 +61,6 @@ export default function AdminLoginPage() {
 
         {/* Form Body */}
         <div className="p-8 space-y-6">
-          <div className="bg-duskk-50 border border-duskk-200 p-3 rounded text-xs text-duskk-600 flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>Default Seed Credentials: <strong>admin@duskk.in</strong> / <strong>DuskkAdmin2026!</strong></span>
-          </div>
-
           {error && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded text-rose-700 text-xs flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -78,6 +78,7 @@ export default function AdminLoginPage() {
                 <input
                   type="email"
                   required
+                  placeholder="Enter administrator email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-9 pr-3 py-2.5 text-xs border border-duskk-300 rounded focus:outline-none focus:border-duskk-gold"
@@ -94,6 +95,7 @@ export default function AdminLoginPage() {
                 <input
                   type="password"
                   required
+                  placeholder="Enter administrator password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-9 pr-3 py-2.5 text-xs border border-duskk-300 rounded focus:outline-none focus:border-duskk-gold"

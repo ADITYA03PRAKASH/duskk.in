@@ -18,6 +18,7 @@ import {
   X,
   ShieldCheck,
   ChevronRight,
+  Sparkles,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -65,6 +66,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Customers (CRM)", href: isLocalAdmin ? "/admin/customers" : "/customers", slug: "customers", icon: Users },
     { name: "Inventory", href: isLocalAdmin ? "/admin/inventory" : "/inventory", slug: "inventory", icon: Boxes },
     { name: "Homepage CMS", href: isLocalAdmin ? "/admin/cms" : "/cms", slug: "cms", icon: FileEdit },
+    { name: "Customer Experiences", href: isLocalAdmin ? "/admin/customer-experiences" : "/customer-experiences", slug: "customer-experiences", icon: Sparkles },
     { name: "Coupons", href: isLocalAdmin ? "/admin/coupons" : "/coupons", slug: "coupons", icon: Tag },
   ];
 
@@ -153,7 +155,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <p className="text-xs font-semibold text-white truncate">
                 {adminUser?.name || "Admin"}
               </p>
-              <p className="text-[10px] text-duskk-400 truncate">{adminUser?.email || "admin@duskk.in"}</p>
+              <p className="text-[10px] text-duskk-400 truncate">{adminUser?.email || "Administrator"}</p>
             </div>
             <button
               onClick={handleLogout}

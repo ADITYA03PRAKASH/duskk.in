@@ -25,11 +25,11 @@ export default function CartPage() {
     if (!couponCode.trim()) return;
 
     const code = couponCode.trim().toUpperCase();
-    if (code === "DUSKK10") {
+    if (code === "WELCOME10" || code === "DUSKK10") {
       const disc = Math.round(subtotal * 0.1);
       setDiscountAmount(disc);
       setCouponStatus(`Coupon ${code} applied! Saved ${formatPrice(disc)}`);
-    } else if (code === "WELCOME500" && subtotal >= 2499) {
+    } else if ((code === "WELCOME500" || code === "DUSKK500") && subtotal >= 2499) {
       setDiscountAmount(500);
       setCouponStatus(`Coupon ${code} applied! Saved ₹500`);
     } else {

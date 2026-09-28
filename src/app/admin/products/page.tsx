@@ -210,12 +210,19 @@ export default function AdminProductsPage() {
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this product?")) return;
+    if (!confirm("Are you sure you want to remove this product? It will be archived and removed from the active catalog.")) return;
     try {
-      await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
-      loadData();
+      const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setProducts((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        alert(data.message || "Failed to remove product");
+      }
+      await loadData();
     } catch (e) {
-      console.error(e);
+      console.error("Delete product network error:", e);
+      alert("Network error removing product.");
     }
   };
 

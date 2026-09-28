@@ -17,16 +17,16 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const envAdminEmail = (process.env.ADMIN_EMAIL || "admin@duskk.in").trim().toLowerCase();
-    const envAdminPassword = process.env.ADMIN_PASSWORD || "DuskkAdmin2026!";
+    const envAdminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.trim().toLowerCase() : "";
+    const envAdminPassword = process.env.ADMIN_PASSWORD || "";
 
     let isValid = false;
     let adminId = "admin_master";
     let adminName = "DUSKK Administrator";
     let adminRole = "SUPER_ADMIN";
 
-    // 1. Authenticate via explicit environment variables / seed credentials
-    if (normalizedEmail === envAdminEmail && password === envAdminPassword) {
+    // 1. Authenticate via configured server environment variables
+    if (envAdminEmail && envAdminPassword && normalizedEmail === envAdminEmail && password === envAdminPassword) {
       isValid = true;
     } else {
       // 2. Authenticate via database-backed admin accounts
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         .from("customers")
         .select("id, first_name, last_name, email, metadata")
         .eq("email", normalizedEmail)
-        .single();
+        .maybeSingle();
 
       if (customer) {
         const metadata = (customer.metadata as any) || {};

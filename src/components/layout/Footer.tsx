@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ShieldCheck, Truck, RefreshCw, Sparkles, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Truck, RefreshCw, Sparkles, Mail, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function Footer() {
   const [email, setEmail] = useState("");
@@ -11,27 +13,33 @@ export function Footer() {
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !email.includes("@")) return;
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
+      setStatus("error");
+      setMsg("Please provide a valid email address.");
+      return;
+    }
 
     setStatus("loading");
+    setMsg("");
     try {
       const res = await fetch("/api/newsletter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: cleanEmail, source: "footer" }),
       });
-      const data = await res.json();
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setStatus("success");
-        setMsg(data.message || "Thank you for subscribing to DUSKK.");
+        setMsg(data.message || "You're in! Welcome to the DUSKK Inner Circle.");
         setEmail("");
       } else {
         setStatus("error");
-        setMsg(data.message || "Something went wrong.");
+        setMsg(data.message || "Unable to subscribe right now. Please try again.");
       }
     } catch {
       setStatus("error");
-      setMsg("Connection error.");
+      setMsg("Unable to subscribe right now. Please try again.");
     }
   };
 
@@ -101,28 +109,47 @@ export function Footer() {
             <div className="pt-2">
               <span className="text-xs text-duskk-400 block mb-2">Join the Inner Circle for private vaults & 10% off:</span>
               {status === "success" ? (
-                <div className="flex items-center space-x-2 text-emerald-400 text-xs">
-                  <CheckCircle2 className="w-4 h-4" />
+                <div className="flex items-center space-x-2 text-emerald-400 text-xs py-2 bg-emerald-950/30 px-3 rounded border border-emerald-800/40">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
                   <span>{msg}</span>
                 </div>
               ) : (
-                <form onSubmit={handleSubscribe} className="flex max-w-sm">
-                  <input
-                    type="email"
-                    required
-                    placeholder="Enter your email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-duskk-800 border border-duskk-700 text-xs text-white placeholder-duskk-500 rounded-l focus:outline-none focus:border-duskk-gold"
-                  />
-                  <button
-                    type="submit"
-                    disabled={status === "loading"}
-                    className="px-4 py-2 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 font-medium text-xs rounded-r transition flex items-center justify-center"
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </form>
+                <div>
+                  <form onSubmit={handleSubscribe} className="flex max-w-sm">
+                    <input
+                      type="email"
+                      required
+                      placeholder="Enter your email address"
+                      value={email}
+                      disabled={status === "loading"}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (status === "error") {
+                          setStatus("idle");
+                          setMsg("");
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 bg-duskk-800 border border-duskk-700 text-xs text-white placeholder-duskk-500 rounded-l focus:outline-none focus:border-duskk-gold disabled:opacity-60"
+                    />
+                    <button
+                      type="submit"
+                      disabled={status === "loading" || !email.trim()}
+                      aria-label="Subscribe to newsletter"
+                      className="px-4 py-2 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 font-medium text-xs rounded-r transition flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {status === "loading" ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-4 h-4" />
+                      )}
+                    </button>
+                  </form>
+                  {status === "error" && (
+                    <p className="text-[11px] text-rose-400 mt-1.5">
+                      {msg || "Unable to subscribe right now. Please try again."}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>

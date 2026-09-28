@@ -257,16 +257,23 @@ export async function DELETE(
       .from("products")
       .update({ status: "archived", updated_at: new Date().toISOString() })
       .eq("id", params.id)
-      .select("slug")
+      .select("id, slug")
       .maybeSingle();
 
     if (error) throw new Error(error.message);
+
+    // Deactivate variants to prevent any active inventory operations
+    await supabaseAdmin
+      .from("product_variants")
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq("product_id", params.id);
 
     try {
       revalidatePath("/", "page");
       revalidatePath("/shop", "page");
       revalidatePath("/category/[slug]", "page");
       revalidatePath("/product/[slug]", "page");
+      revalidatePath("/admin/products", "page");
       if (archivedProduct?.slug) {
         revalidatePath(`/product/${archivedProduct.slug}`, "page");
       }
@@ -274,7 +281,7 @@ export async function DELETE(
       console.warn("Revalidation warning on delete:", revErr);
     }
 
-    return NextResponse.json({ success: true, message: "Product archived successfully" });
+    return NextResponse.json({ success: true, message: "Product deleted/archived successfully" });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

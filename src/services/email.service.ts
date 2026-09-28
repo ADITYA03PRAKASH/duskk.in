@@ -785,3 +785,82 @@ export async function sendContactFormAcknowledgement(data: ContactAcknowledgemen
     html: emailHtml,
   });
 }
+
+// ---------------------------------------------------------------------------
+// 6. NEWSLETTER WELCOME EMAIL (DUSKK INNER CIRCLE)
+// ---------------------------------------------------------------------------
+export interface NewsletterWelcomeEmailData {
+  email: string;
+  couponCode?: string;
+}
+
+export async function sendNewsletterWelcomeEmailDetailed(data: NewsletterWelcomeEmailData): Promise<EmailSendResult> {
+  const siteUrl = getSiteUrl();
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
+  const subject = "Welcome to the DUSKK Inner Circle";
+  const couponCode = data.couponCode || "WELCOME10";
+
+  const bodyContent = `
+    <div style="margin-bottom: 24px; text-align: center;">
+      <span style="display: inline-block; background-color: #0F0F0F; color: #C5A880; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 5px 14px; border-radius: 3px; border: 1px solid #C5A880;">
+        INNER CIRCLE PRIVILEGE
+      </span>
+    </div>
+
+    <h2 style="font-size: 22px; color: #111111; margin: 0 0 16px 0; font-family: Georgia, serif; font-weight: 400; text-align: center;">
+      Welcome to the DUSKK Inner Circle
+    </h2>
+
+    <p style="color: #444444; font-size: 14px; line-height: 1.7; margin: 0 0 16px 0;">
+      Thank you for subscribing. You are now part of our private community where thoughtful craftsmanship meets timeless everyday luxury and meaningful gifting.
+    </p>
+
+    <p style="color: #444444; font-size: 14px; line-height: 1.7; margin: 0 0 24px 0;">
+      As an Inner Circle member, you will enjoy priority access to new collection drops, private vault sales, curated styling guides, and exclusive member privileges.
+    </p>
+
+    <!-- Welcome Coupon Card -->
+    <div style="background-color: #FAF8F5; border: 1px solid #E5DFD7; border-radius: 8px; padding: 24px 20px; text-align: center; margin: 24px 0;">
+      <p style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #9A7B4F; margin: 0 0 6px 0; font-weight: 700;">Exclusive Welcome Gift</p>
+      <h3 style="font-size: 18px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif; font-weight: 500;">
+        10% Off Your First Luxury Purchase
+      </h3>
+      <div style="display: inline-block; background-color: #0F0F0F; color: #C5A880; font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: 700; letter-spacing: 4px; padding: 10px 24px; border-radius: 4px; margin: 6px 0 10px 0; border: 1px dashed #C5A880;">
+        ${couponCode}
+      </div>
+      <p style="font-size: 12px; color: #666666; margin: 6px 0 0 0; line-height: 1.5;">
+        Apply coupon <strong style="color: #111111;">${couponCode}</strong> at checkout on orders above ₹999.
+      </p>
+    </div>
+
+    <!-- CTA Button -->
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${siteUrl}/shop" style="display: inline-block; background-color: #0F0F0F; color: #FFFFFF; text-decoration: none; padding: 13px 32px; border-radius: 4px; font-size: 12px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;">
+        Discover Collections &rarr;
+      </a>
+    </div>
+
+    <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #EAEAEA;">
+      <p style="margin: 0; font-size: 12px; color: #777777; line-height: 1.6;">
+        Warm regards,<br/>
+        <strong style="color: #111111;">The DUSKK Team</strong><br/>
+        <a href="${siteUrl}" style="color: #9A7B4F; text-decoration: underline;">www.duskk.in</a>
+      </p>
+    </div>
+  `;
+
+  const emailHtml = buildEmailTemplate(bodyContent);
+
+  return executeSendMailDetailed({
+    from: fromAddress,
+    to: data.email,
+    replyTo: "duskk.india@gmail.com",
+    subject,
+    html: emailHtml,
+  });
+}
+
+export async function sendNewsletterWelcomeEmail(data: NewsletterWelcomeEmailData): Promise<boolean> {
+  const result = await sendNewsletterWelcomeEmailDetailed(data);
+  return result.success;
+}

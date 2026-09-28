@@ -10,8 +10,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const search = searchParams.get("search");
+    const status = searchParams.get("status");
+
     try {
-      const { data: products, error } = await supabaseAdmin
+      let query = supabaseAdmin
         .from("products")
         .select(`
           id,
@@ -35,6 +39,20 @@ export async function GET(req: NextRequest) {
           product_variants (*)
         `)
         .order("created_at", { ascending: false });
+
+      if (status) {
+        query = query.eq("status", status);
+      } else {
+        // Exclude archived/deleted products by default
+        query = query.neq("status", "archived");
+      }
+
+      if (search && search.trim()) {
+        const q = search.trim();
+        query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,sku.ilike.%${q}%`);
+      }
+
+      const { data: products, error } = await query;
 
       if (!error && products) {
         const formatted = products.map((p: any) => ({
