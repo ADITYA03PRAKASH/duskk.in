@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
-import { getProducts, getCategories } from "@/services/catalog.service";
+import { getProducts, getCategories, getBanners } from "@/services/catalog.service";
 import { getPublicTestimonials, getTestimonialSectionSettings } from "@/services/testimonials.service";
 import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award, ExternalLink } from "lucide-react";
 
@@ -12,27 +12,32 @@ import { Hero } from "@/components/home/Hero";
 export const revalidate = 60; // ISR cache 60 seconds
 
 export default async function HomePage() {
-  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection] = await Promise.all([
+  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection, banners] = await Promise.all([
     getCategories(),
     getProducts({ limit: 4, featured: true }),
     getProducts({ limit: 4, bestSeller: true }),
     getPublicTestimonials(),
     getTestimonialSectionSettings(),
+    getBanners(),
   ]);
 
   const featuredProducts = featuredResult.products;
   const bestSellers = bestSellersResult.products;
+
+  // CMS Hero Banner — use first active hero banner; service already provides fallback
+  const heroBanner = banners.find((b: any) => b.banner_type === "hero") ?? banners[0];
 
   return (
     <>
       <Navbar />
 
       <main className="flex-1">
-        {/* 1. HERO VIDEO SECTION */}
+        {/* 1. HERO VIDEO SECTION — CMS-driven via getBanners() */}
         <Hero
-          initialTitle="Thoughtful Gifts. Meaningful Moments."
-          initialSubtitle="Discover gifts made for celebrations, connections, and everyday moments."
-          initialLink="/shop"
+          initialTitle={heroBanner?.title}
+          initialSubtitle={heroBanner?.subtitle}
+          initialLink={heroBanner?.link_url}
+          initialPoster={heroBanner?.image_url_desktop}
         />
 
         {/* 2. FEATURED CATEGORIES */}
@@ -57,7 +62,11 @@ export default async function HomePage() {
                 >
                   <div className="relative aspect-square w-full overflow-hidden bg-duskk-100 mb-3">
                     <img
-                      src={cat.image_url || cat.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=400&q=80"}
+                      src={
+                        cat.slug === "earrings"
+                          ? "https://i.pinimg.com/736x/f3/6c/23/f36c237d407964256dbd7ca71a760284.jpg"
+                          : cat.image_url || cat.image || "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80"
+                      }
                       alt={cat.name}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     />

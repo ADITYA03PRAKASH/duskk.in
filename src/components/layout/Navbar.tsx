@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
-import { ShoppingBag, Search, Menu, X, Compass, User, Sparkles } from "lucide-react";
+import { ShoppingBag, Search, Menu, X, Compass, Sparkles } from "lucide-react";
+import { D_LOGO_SRC } from "@/lib/logo";
 
 export function Navbar() {
   const { itemCount, openCart } = useCart();
@@ -37,15 +38,20 @@ export function Navbar() {
     }
   };
 
-  const navLinks = [
-    { name: "Shop All", href: "/shop" },
-    { name: "Earrings", href: "/category/earrings" },
-    { name: "Necklaces", href: "/category/necklaces" },
-    { name: "Pendants", href: "/category/pendants" },
-    { name: "Rings", href: "/category/rings" },
-    { name: "Bracelets", href: "/category/bracelets" },
-    { name: "About", href: "/about" },
+  const leftNavLinks = [
+    { name: "SHOP ALL", href: "/shop" },
+    { name: "EARRINGS", href: "/category/earrings" },
+    { name: "NECKLACES", href: "/category/necklaces" },
+    { name: "PAYALS", href: "/category/payals" },
   ];
+
+  const rightNavLinks = [
+    { name: "RINGS", href: "/category/rings" },
+    { name: "BRACELETS", href: "/category/bracelets" },
+    { name: "ABOUT", href: "/about" },
+  ];
+
+  const allNavLinks = [...leftNavLinks, ...rightNavLinks];
 
   return (
     <>
@@ -59,14 +65,13 @@ export function Navbar() {
 
       {/* Main Sticky Navbar */}
       <header
-        className={`sticky top-0 z-40 transition-all duration-300 ${
-          isScrolled
-            ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-duskk-200 py-3"
-            : "bg-[#FAF8F5] border-b border-duskk-200/60 py-4"
-        }`}
+        className={`sticky top-0 z-40 transition-all duration-300 ${isScrolled
+          ? "bg-[#FAF8F5]/95 backdrop-blur-md shadow-sm border-b border-[#EAE3DA] py-2.5"
+          : "bg-[#FAF8F5] border-b border-[#EAE3DA]/70 py-3.5"
+          }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          {/* Mobile menu button */}
+          {/* Mobile menu button & search */}
           <div className="flex items-center lg:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -85,14 +90,13 @@ export function Navbar() {
           </div>
 
           {/* Desktop Left Nav Links */}
-          <nav className="hidden lg:flex items-center space-x-7">
-            {navLinks.slice(0, 4).map((link) => (
+          <nav className="hidden lg:flex items-center space-x-7 xl:space-x-9">
+            {leftNavLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
-                className={`text-xs uppercase tracking-widest font-medium transition-colors hover:text-duskk-gold ${
-                  pathname === link.href ? "text-duskk-gold font-semibold" : "text-duskk-800"
-                }`}
+                className={`text-[11px] xl:text-xs uppercase tracking-[0.2em] font-medium transition-colors hover:text-duskk-gold ${pathname === link.href ? "text-duskk-gold font-semibold" : "text-[#7A6B58] hover:text-[#1F1F1F]"
+                  }`}
               >
                 {link.name}
               </Link>
@@ -100,27 +104,39 @@ export function Navbar() {
           </nav>
 
           {/* Center Brand Logo */}
-          <div className="flex-1 text-center lg:flex-none">
-            <Link href="/" className="inline-block group">
-              <span className="font-serif text-2xl sm:text-3xl tracking-[0.35em] uppercase font-light text-duskk-900 group-hover:text-duskk-gold transition-colors">
-                DUSKK
-              </span>
-              <span className="block text-[8px] sm:text-[9px] tracking-[0.35em] uppercase text-duskk-500 font-sans text-center -mt-1">
-                CURATED GIFTS
+          <div className="flex-1 text-center lg:flex-none px-3">
+            <Link href="/" className="inline-flex flex-col items-center group">
+              <div className="flex items-center justify-center">
+                {/* Original Gold Monogram D Logo */}
+                <div className="relative w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={D_LOGO_SRC}
+                    alt="D"
+                    className="w-full h-full object-contain filter drop-shadow-[0_1px_2px_rgba(197,168,128,0.3)]"
+                  />
+                </div>
+
+                {/* Wordmark USKK in matching Luxury Serif */}
+                <span className="font-serif text-2xl sm:text-3xl md:text-[32px] tracking-[0.25em] uppercase font-bold text-[#1F1F1F] group-hover:text-duskk-gold transition-colors leading-none pl-1 select-none">
+                  USKK
+                </span>
+              </div>
+              <span className="block text-[8px] sm:text-[8.5px] tracking-[0.42em] uppercase font-light text-[#8C8276] font-sans text-center mt-1">
+                ELEGANCE CRAFTED FOR YOU
               </span>
             </Link>
           </div>
 
           {/* Desktop Right Nav Links & Actions */}
-          <div className="flex items-center space-x-6">
-            <nav className="hidden lg:flex items-center space-x-7 mr-2">
-              {navLinks.slice(4).map((link) => (
+          <div className="flex items-center space-x-6 xl:space-x-8">
+            <nav className="hidden lg:flex items-center space-x-7 xl:space-x-9">
+              {rightNavLinks.map((link) => (
                 <Link
                   key={link.name}
                   href={link.href}
-                  className={`text-xs uppercase tracking-widest font-medium transition-colors hover:text-duskk-gold ${
-                    pathname === link.href ? "text-duskk-gold font-semibold" : "text-duskk-800"
-                  }`}
+                  className={`text-[11px] xl:text-xs uppercase tracking-[0.2em] font-medium transition-colors hover:text-duskk-gold ${pathname === link.href ? "text-duskk-gold font-semibold" : "text-[#7A6B58] hover:text-[#1F1F1F]"
+                    }`}
                 >
                   {link.name}
                 </Link>
@@ -130,30 +146,30 @@ export function Navbar() {
             {/* Search Trigger */}
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="hidden lg:flex items-center text-xs tracking-wider uppercase text-duskk-700 hover:text-duskk-gold transition space-x-1"
+              className="hidden lg:flex items-center text-[11px] xl:text-xs tracking-[0.18em] uppercase text-[#1F1F1F] hover:text-duskk-gold transition space-x-1.5 font-medium"
               title="Search collection"
             >
-              <Search className="w-4 h-4" />
-              <span>Search</span>
+              <Search className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span>SEARCH</span>
             </button>
 
             {/* Track Order Link */}
             <Link
               href="/order/track"
-              className="hidden md:flex items-center text-xs tracking-wider uppercase text-duskk-700 hover:text-duskk-gold transition space-x-1"
+              className="hidden md:flex items-center text-[11px] xl:text-xs tracking-[0.18em] uppercase text-[#1F1F1F] hover:text-duskk-gold transition space-x-1.5 font-medium"
               title="Track your order"
             >
-              <Compass className="w-4 h-4" />
-              <span>Track</span>
+              <Compass className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span>TRACK</span>
             </Link>
 
             {/* Cart Button */}
             <button
               onClick={openCart}
-              className="relative p-2 text-duskk-900 hover:text-duskk-gold transition flex items-center"
+              className="relative p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition flex items-center"
               aria-label="View shopping bag"
             >
-              <ShoppingBag className="w-5 h-5" />
+              <ShoppingBag className="w-4 h-4 md:w-5 md:h-5 stroke-[1.8]" />
               {itemCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-duskk-900 text-white font-sans text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
                   {itemCount}
@@ -229,21 +245,21 @@ export function Navbar() {
         {isMobileMenuOpen && (
           <div className="lg:hidden bg-white border-b border-duskk-200 px-6 py-6 space-y-4 shadow-xl">
             <nav className="flex flex-col space-y-3">
-              {navLinks.map((link) => (
+              {allNavLinks.map((link) => (
                 <Link
                   key={link.name}
                   href={link.href}
-                  className="text-sm font-medium tracking-wider uppercase text-duskk-900 hover:text-duskk-gold py-1 border-b border-duskk-50"
+                  className="text-xs font-medium tracking-widest uppercase text-duskk-900 hover:text-duskk-gold py-1 border-b border-duskk-50"
                 >
                   {link.name}
                 </Link>
               ))}
               <Link
                 href="/order/track"
-                className="text-sm font-medium tracking-wider uppercase text-duskk-900 hover:text-duskk-gold py-1 border-b border-duskk-50 flex items-center space-x-2"
+                className="text-xs font-medium tracking-widest uppercase text-duskk-900 hover:text-duskk-gold py-1 border-b border-duskk-50 flex items-center space-x-2"
               >
                 <Compass className="w-4 h-4 text-duskk-gold" />
-                <span>Track My Order</span>
+                <span>TRACK ORDER</span>
               </Link>
             </nav>
           </div>

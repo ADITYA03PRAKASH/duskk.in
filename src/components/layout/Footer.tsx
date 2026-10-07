@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { ShieldCheck, Truck, RefreshCw, Sparkles, Mail, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import { D_LOGO_SRC } from "@/lib/logo";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -95,12 +96,22 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           {/* Brand Info */}
           <div className="lg:col-span-2 space-y-4">
-            <Link href="/" className="inline-block">
-              <span className="font-serif text-3xl tracking-[0.35em] uppercase text-white font-light">
-                DUSKK
-              </span>
-              <span className="block text-[10px] tracking-[0.4em] uppercase text-duskk-gold font-sans -mt-1">
-                CURATED GIFTS &bull; DUSKK.IN
+            <Link href="/" className="inline-flex flex-col items-start group">
+              <div className="flex items-center">
+                <div className="relative w-9 h-9 flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={D_LOGO_SRC}
+                    alt="D"
+                    className="w-full h-full object-contain filter drop-shadow-[0_1px_3px_rgba(197,168,128,0.4)]"
+                  />
+                </div>
+                <span className="font-serif text-3xl tracking-[0.25em] uppercase font-bold text-white group-hover:text-duskk-gold transition-colors leading-none pl-1 select-none">
+                  USKK
+                </span>
+              </div>
+              <span className="block text-[9px] tracking-[0.4em] uppercase text-duskk-gold font-sans mt-1">
+                Elegance Crafted for You
               </span>
             </Link>
             <p className="text-xs text-duskk-300 leading-relaxed max-w-sm">
@@ -171,8 +182,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/category/pendants" className="hover:text-duskk-gold transition">
-                  Pendants & Medallions
+                <Link href="/category/payal" className="hover:text-duskk-gold transition">
+                  Payals & Anklets
                 </Link>
               </li>
               <li>

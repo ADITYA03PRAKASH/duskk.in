@@ -29,7 +29,7 @@ async function main() {
       name: "Earrings",
       slug: "earrings",
       description: "Handcrafted studs, drops, and hoops with 18k gold vermeil & freshwater pearls.",
-      image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=800&q=80",
+      image: "https://i.pinimg.com/736x/f3/6c/23/f36c237d407964256dbd7ca71a760284.jpg",
       sortOrder: 1,
     },
     {

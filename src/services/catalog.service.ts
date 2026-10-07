@@ -31,7 +31,7 @@ export const FALLBACK_CATEGORIES = [
     name: "Earrings",
     slug: "earrings",
     description: "Bespoke stud earrings, baroque pearls, and demi-fine hoops.",
-    image_url: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=600&q=80",
+    image_url: "https://i.pinimg.com/736x/f3/6c/23/f36c237d407964256dbd7ca71a760284.jpg",
     display_order: 1,
     is_active: true,
   },

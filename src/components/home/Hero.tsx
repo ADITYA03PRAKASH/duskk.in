@@ -8,12 +8,14 @@ interface HeroProps {
   initialTitle?: string;
   initialSubtitle?: string;
   initialLink?: string;
+  initialPoster?: string;
 }
 
 export function Hero({
   initialTitle = "Thoughtful Gifts. Meaningful Moments.",
   initialSubtitle = "Discover gifts made for celebrations, connections, and everyday moments.",
   initialLink = "/shop",
+  initialPoster,
 }: HeroProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoError, setVideoError] = useState(false);
@@ -44,6 +46,7 @@ export function Hero({
   }, [prefersReducedMotion]);
 
   const fallbackPoster =
+    initialPoster ||
     "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=1920&q=85";
 
   return (
@@ -95,7 +98,7 @@ export function Hero({
           {/* Brand Badge */}
           <div className="inline-flex items-center space-x-2 text-xs font-mono tracking-[0.25em] uppercase text-duskk-gold border border-duskk-gold/40 px-3.5 py-1.5 rounded-full bg-duskk-900/70 backdrop-blur-md shadow-sm">
             <Gift className="w-3.5 h-3.5 text-duskk-gold" />
-            <span>DUSKK &bull; CURATED GIFTS</span>
+            <span>DUSKK &bull; MADE TO GLOW</span>
           </div>
 
           {/* Main Headline */}
