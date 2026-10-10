@@ -8,12 +8,14 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text();
     const signature = req.headers.get("x-razorpay-signature");
 
-    // Check webhook signature if secret configured
-    if (process.env.RAZORPAY_WEBHOOK_SECRET && signature) {
-      const isValid = verifyWebhookSignature(rawBody, signature);
-      if (!isValid) {
-        return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-      }
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error("RAZORPAY_WEBHOOK_SECRET is not configured.");
+      return NextResponse.json({ error: "Webhook service unavailable" }, { status: 503 });
+    }
+
+    if (!signature || !verifyWebhookSignature(rawBody, signature)) {
+      return NextResponse.json({ error: "Invalid or missing webhook signature" }, { status: 401 });
     }
 
     const event = JSON.parse(rawBody);

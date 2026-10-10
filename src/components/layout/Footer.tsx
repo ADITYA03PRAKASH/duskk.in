@@ -182,7 +182,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/category/payal" className="hover:text-duskk-gold transition">
+                <Link href="/category/payals" className="hover:text-duskk-gold transition">
                   Payals & Anklets
                 </Link>
               </li>

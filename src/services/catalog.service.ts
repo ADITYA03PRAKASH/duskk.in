@@ -313,20 +313,26 @@ export async function getProducts(params: ProductQueryParams) {
       .eq("status", "active");
 
     if (category) {
+      const categorySlug = category.toLowerCase() === "payal" ? "payals" : category;
       try {
         const { data: catData } = await withTimeout(
           supabaseAdmin
             .from("categories")
             .select("id")
-            .eq("slug", category)
+            .eq("slug", categorySlug)
             .maybeSingle(),
           8000
         );
         if (catData) {
           query = query.eq("category_id", catData.id);
+        } else {
+          // Slug not found in DB — apply a no-match filter so zero products
+          // are returned instead of silently returning ALL products.
+          query = query.eq("category_id", "00000000-0000-0000-0000-000000000000");
         }
       } catch {
-        // Fallback
+        // On timeout/error also apply no-match filter to avoid showing all products
+        query = query.eq("category_id", "00000000-0000-0000-0000-000000000000");
       }
     }
 
@@ -607,12 +613,13 @@ export async function getCategories() {
 }
 
 export async function getCategoryBySlug(slug: string) {
+  const normalizedSlug = slug.toLowerCase() === "payal" ? "payals" : slug;
   try {
     const { data, error } = await withTimeout(
       supabaseAdmin
         .from("categories")
         .select("*")
-        .eq("slug", slug)
+        .eq("slug", normalizedSlug)
         .eq("is_active", true)
         .single(),
       8000

@@ -20,20 +20,30 @@ export default function CartPage() {
   const shippingCharge = subtotal >= freeShippingThreshold ? 0 : 99;
   const totalAmount = Math.max(0, subtotal - discountAmount + shippingCharge);
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
+  const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!couponCode.trim()) return;
 
-    const code = couponCode.trim().toUpperCase();
-    if (code === "WELCOME10" || code === "DUSKK10") {
-      const disc = Math.round(subtotal * 0.1);
-      setDiscountAmount(disc);
-      setCouponStatus(`Coupon ${code} applied! Saved ${formatPrice(disc)}`);
-    } else if ((code === "WELCOME500" || code === "DUSKK500") && subtotal >= 2499) {
-      setDiscountAmount(500);
-      setCouponStatus(`Coupon ${code} applied! Saved ₹500`);
-    } else {
-      setCouponStatus("Invalid or inapplicable coupon code.");
+    try {
+      const res = await fetch("/api/checkout/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+          couponCode: couponCode.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.data?.couponApplied) {
+        setDiscountAmount(data.data.couponApplied.discountValue);
+        setCouponStatus(`Coupon ${data.data.couponApplied.code} applied! Saved ${formatPrice(data.data.couponApplied.discountValue)}`);
+      } else {
+        setDiscountAmount(0);
+        setCouponStatus(data.message || "Invalid or inapplicable coupon code.");
+      }
+    } catch {
+      setDiscountAmount(0);
+      setCouponStatus("Could not validate coupon.");
     }
   };
 
@@ -197,7 +207,10 @@ export default function CartPage() {
 
                 {/* Checkout CTA */}
                 <button
-                  onClick={() => router.push("/checkout")}
+                  onClick={() => {
+                    const couponParam = couponCode && discountAmount > 0 ? `?coupon=${encodeURIComponent(couponCode.trim().toUpperCase())}` : "";
+                    router.push(`/checkout${couponParam}`);
+                  }}
                   className="w-full py-4 bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white text-xs uppercase tracking-widest font-semibold transition flex items-center justify-center space-x-2 shadow-lg"
                 >
                   <span>Proceed to Guest Checkout</span>

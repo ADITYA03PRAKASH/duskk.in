@@ -17,9 +17,9 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Default fallback to ensure production works out-of-the-box if Vercel env vars are not yet configured
-    const envAdminEmail = (process.env.ADMIN_EMAIL || "admin@duskk.in").trim().toLowerCase();
-    const envAdminPassword = process.env.ADMIN_PASSWORD || "DuskkAdmin2026!";
+    // Environment-configured administrator credentials (must be explicitly configured)
+    const envAdminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.trim().toLowerCase() : null;
+    const envAdminPassword = process.env.ADMIN_PASSWORD || null;
 
     let isValid = false;
     let adminId = "admin_master";

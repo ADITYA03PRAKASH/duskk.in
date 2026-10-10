@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useCart } from "@/context/CartContext";
@@ -21,8 +21,9 @@ import {
   CreditCard,
 } from "lucide-react";
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { items, clearCart, subtotal } = useCart();
 
   // Customer Contact State
@@ -48,6 +49,16 @@ export default function CheckoutPage() {
   const [isInitializingPayment, setIsInitializingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [paymentModalData, setPaymentModalData] = useState<any | null>(null);
+
+  // Auto-apply coupon from query params when items are available
+  useEffect(() => {
+    const couponParam = searchParams.get("coupon");
+    if (couponParam && items.length > 0 && !couponApplied) {
+      const code = couponParam.trim().toUpperCase();
+      setCouponCode(code);
+      applyCoupon(code);
+    }
+  }, [items, searchParams]);
 
   // Auto-redirect if cart is empty and not processing
   useEffect(() => {
@@ -82,10 +93,9 @@ export default function CheckoutPage() {
   const shippingCharge = subtotal >= 999 ? 0 : 99;
   const totalAmount = Math.max(0, subtotal - discount + shippingCharge);
 
-  const handleApplyCoupon = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const applyCoupon = async (codeToApply: string) => {
     setCouponError("");
-    if (!couponCode.trim()) return;
+    if (!codeToApply.trim() || items.length === 0) return;
 
     try {
       const res = await fetch("/api/checkout/validate", {
@@ -93,7 +103,7 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-          couponCode: couponCode.trim(),
+          couponCode: codeToApply.trim().toUpperCase(),
         }),
       });
       const data = await res.json();
@@ -107,6 +117,11 @@ export default function CheckoutPage() {
     } catch {
       setCouponError("Could not validate coupon.");
     }
+  };
+
+  const handleApplyCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await applyCoupon(couponCode);
   };
 
   const handleProceedToPayment = async (e: React.FormEvent) => {
@@ -607,5 +622,13 @@ export default function CheckoutPage() {
 
       <Footer />
     </>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center text-xs text-duskk-500">Loading Checkout...</div>}>
+      <CheckoutContent />
+    </Suspense>
   );
 }

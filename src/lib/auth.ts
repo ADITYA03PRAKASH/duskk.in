@@ -2,7 +2,15 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-const JWT_SECRET = process.env.JWT_SECRET || "duskk_super_secret_jwt_key_2026_modern_fashion_platform";
+const rawJwtSecret = process.env.JWT_SECRET;
+
+if (!rawJwtSecret) {
+  throw new Error(
+    "Missing JWT configuration: JWT_SECRET environment variable must be defined."
+  );
+}
+
+const JWT_SECRET: string = rawJwtSecret;
 const ADMIN_TOKEN_COOKIE = "duskk_admin_token";
 const USER_TOKEN_COOKIE = "duskk_user_token";
 
