@@ -102,6 +102,7 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
 
   const allNavLinks = [
     { name: "SHOP ALL", href: "/shop" },
+    { name: "GIFT SETS & COMBOS", href: "/combos" },
     ...(categories.length > 0
       ? categories.map((c) => ({ name: c.name, href: `/category/${c.slug}` }))
       : [

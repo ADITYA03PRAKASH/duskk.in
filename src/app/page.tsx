@@ -6,6 +6,8 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { getProducts, getCategories, getBanners } from "@/services/catalog.service";
 import { getPublicTestimonials, getTestimonialSectionSettings } from "@/services/testimonials.service";
 import { getPromotionalCoupon } from "@/services/pricing.service";
+import { getPublishedCombos } from "@/services/combo.service";
+import { ComboOffersSection } from "@/components/home/ComboOffersSection";
 import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award, ExternalLink } from "lucide-react";
 
 import { Hero } from "@/components/home/Hero";
@@ -13,7 +15,7 @@ import { Hero } from "@/components/home/Hero";
 export const revalidate = 60; // ISR cache 60 seconds
 
 export default async function HomePage() {
-  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection, banners, promoCoupon] = await Promise.all([
+  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection, banners, promoCoupon, combos] = await Promise.all([
     getCategories(),
     getProducts({ limit: 4, featured: true }),
     getProducts({ limit: 4, bestSeller: true }),
@@ -21,6 +23,7 @@ export default async function HomePage() {
     getTestimonialSectionSettings(),
     getBanners(),
     getPromotionalCoupon(),
+    getPublishedCombos(),
   ]);
 
   const featuredProducts = featuredResult.products;
@@ -160,6 +163,9 @@ export default async function HomePage() {
             </div>
           </section>
         )}
+
+        {/* COMBO OFFERS & CURATED GIFT SETS */}
+        <ComboOffersSection combos={combos} />
 
         {/* 5. BEST SELLERS */}
         <section className="py-20 bg-duskk-cream">

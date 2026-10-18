@@ -100,66 +100,84 @@ export function CartDrawer() {
                 </button>
               </div>
             ) : (
-              items.map((item) => (
-                <div
-                  key={item.productId}
-                  className="flex space-x-4 py-3 border-b border-duskk-100 last:border-0"
-                >
-                  <img
-                    src={item.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=300&q=80"}
-                    alt={item.name}
-                    className="w-20 h-20 object-cover rounded bg-duskk-50 flex-shrink-0 border border-duskk-100"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <h4 className="text-sm font-medium text-duskk-900 line-clamp-1">
-                        {item.name}
-                      </h4>
-                      <button
-                        onClick={() => removeItem(item.productId)}
-                        className="text-duskk-400 hover:text-rose-600 transition p-1 ml-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-duskk-500 font-mono mt-0.5">SKU: {item.sku}</p>
-                    <div className="flex items-baseline space-x-2 mt-1">
-                      <span className="text-sm font-semibold text-duskk-900">
-                        {formatPrice(item.price)}
-                      </span>
-                      {item.mrp > item.price && (
-                        <span className="text-xs text-duskk-400 line-through">
-                          {formatPrice(item.mrp)}
-                        </span>
-                      )}
-                    </div>
+              items.map((item) => {
+                const itemKey = item.comboId
+                  ? `combo_${item.comboId}`
+                  : item.variantId
+                  ? `${item.productId}_${item.variantId}`
+                  : item.productId;
 
-                    {/* Quantity controls */}
-                    <div className="flex items-center space-x-3 mt-3">
-                      <div className="flex items-center border border-duskk-300 rounded bg-white">
+                return (
+                  <div
+                    key={itemKey}
+                    className="flex space-x-4 py-3 border-b border-duskk-100 last:border-0"
+                  >
+                    <img
+                      src={item.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=300&q=80"}
+                      alt={item.name}
+                      className="w-20 h-20 object-cover rounded bg-duskk-50 flex-shrink-0 border border-duskk-100"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          {item.isCombo && (
+                            <span className="inline-block px-1.5 py-0.5 mb-1 text-[10px] uppercase font-bold tracking-wider bg-duskk-gold/15 text-duskk-gold rounded">
+                              Combo Offer
+                            </span>
+                          )}
+                          <h4 className="text-sm font-medium text-duskk-900 line-clamp-1">
+                            {item.name}
+                          </h4>
+                        </div>
                         <button
-                          onClick={() => updateQuantity(item.productId, item.quantity - 1)}
-                          className="px-2 py-1 text-duskk-600 hover:text-duskk-900 hover:bg-duskk-100"
+                          onClick={() => removeItem(itemKey)}
+                          className="text-duskk-400 hover:text-rose-600 transition p-1 ml-1"
                         >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="px-2 text-xs font-medium text-duskk-900 min-w-[20px] text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1)}
-                          className="px-2 py-1 text-duskk-600 hover:text-duskk-900 hover:bg-duskk-100"
-                        >
-                          <Plus className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      <span className="text-xs text-duskk-500">
-                        Subtotal: <strong className="text-duskk-900">{formatPrice(item.price * item.quantity)}</strong>
-                      </span>
+                      {item.variantTitle && (
+                        <p className="text-xs text-duskk-600 font-medium mt-0.5">{item.variantTitle}</p>
+                      )}
+                      <p className="text-xs text-duskk-500 font-mono mt-0.5">SKU: {item.sku}</p>
+                      <div className="flex items-baseline space-x-2 mt-1">
+                        <span className="text-sm font-semibold text-duskk-900">
+                          {formatPrice(item.price)}
+                        </span>
+                        {item.mrp > item.price && (
+                          <span className="text-xs text-duskk-400 line-through">
+                            {formatPrice(item.mrp)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Quantity controls */}
+                      <div className="flex items-center space-x-3 mt-3">
+                        <div className="flex items-center border border-duskk-300 rounded bg-white">
+                          <button
+                            onClick={() => updateQuantity(itemKey, item.quantity - 1)}
+                            className="px-2 py-1 text-duskk-600 hover:text-duskk-900 hover:bg-duskk-100"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="px-2 text-xs font-medium text-duskk-900 min-w-[20px] text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(itemKey, item.quantity + 1)}
+                            className="px-2 py-1 text-duskk-600 hover:text-duskk-900 hover:bg-duskk-100"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className="text-xs text-duskk-500">
+                          Subtotal: <strong className="text-duskk-900">{formatPrice(item.price * item.quantity)}</strong>
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

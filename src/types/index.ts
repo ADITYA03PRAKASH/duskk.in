@@ -1,5 +1,6 @@
 export interface CartItemInput {
-  productId: string;
+  productId?: string;
+  comboId?: string;
   variantId?: string | null;
   quantity: number;
 }
@@ -27,6 +28,76 @@ export interface CheckoutPayload {
   notes?: string;
 }
 
+export interface ComboItemDetail {
+  id: string;
+  comboId: string;
+  productId: string;
+  variantId?: string | null;
+  quantity: number;
+  sortOrder: number;
+  product: {
+    id: string;
+    title: string;
+    slug: string;
+    sku: string;
+    basePrice: number;
+    salePrice?: number | null;
+    image?: string | null;
+    status?: string;
+  };
+  variant?: {
+    id: string;
+    title: string;
+    sku: string;
+    price?: number;
+    image?: string | null;
+    stockQuantity: number;
+    reservedQuantity?: number;
+    isActive?: boolean;
+  } | null;
+}
+
+export interface Combo {
+  id: string;
+  slug: string;
+  title: string;
+  shortDescription?: string | null;
+  description?: string | null;
+  price: number;
+  mrp: number;
+  imageUrl?: string | null;
+  galleryImages: string[];
+  isActive: boolean;
+  isFeatured: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  itemsCount?: number;
+  items?: ComboItemDetail[];
+  savingsPercent?: number;
+  savingsAmount?: number;
+}
+
+export interface ComboInput {
+  title: string;
+  slug?: string;
+  shortDescription?: string;
+  description?: string;
+  price: number;
+  mrp?: number;
+  imageUrl?: string;
+  galleryImages?: string[];
+  isActive?: boolean;
+  isFeatured?: boolean;
+  displayOrder?: number;
+  items: {
+    productId: string;
+    variantId?: string | null;
+    quantity: number;
+    sortOrder?: number;
+  }[];
+}
+
 export interface PriceBreakdown {
   subtotal: number;
   discount: number;
@@ -39,7 +110,9 @@ export interface PriceBreakdown {
     discountType: string;
   };
   validatedItems: {
-    productId: string;
+    productId?: string | null;
+    comboId?: string | null;
+    isCombo?: boolean;
     variantId?: string | null;
     name: string;
     variantTitle?: string | null;
@@ -50,6 +123,13 @@ export interface PriceBreakdown {
     quantity: number;
     subtotal: number;
     availableStock: number;
+    comboComponents?: {
+      productId: string;
+      variantId?: string | null;
+      quantity: number;
+      name: string;
+      sku: string;
+    }[];
   }[];
 }
 

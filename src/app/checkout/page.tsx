@@ -102,7 +102,11 @@ function CheckoutContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+          items: items.map((i) => ({
+            productId: i.comboId ? undefined : i.productId,
+            comboId: i.comboId,
+            quantity: i.quantity,
+          })),
           couponCode: codeToApply.trim().toUpperCase(),
         }),
       });
@@ -171,7 +175,8 @@ function CheckoutContent() {
             landmark,
           },
           items: items.map((i) => ({
-            productId: i.productId,
+            productId: i.comboId ? undefined : i.productId,
+            comboId: i.comboId,
             name: i.name,
             price: i.price,
             image: i.image,
@@ -502,7 +507,7 @@ function CheckoutContent() {
                     {/* Compact Item Review */}
                     <div className="max-h-60 overflow-y-auto divide-y divide-duskk-100 pr-1">
                       {items.map((i) => (
-                        <div key={i.productId} className="py-2.5 flex items-center justify-between text-xs">
+                        <div key={i.comboId ? `combo_${i.comboId}` : (i.variantId ? `${i.productId}_${i.variantId}` : i.productId)} className="py-2.5 flex items-center justify-between text-xs">
                           <div className="flex items-center space-x-3 min-w-0 pr-2">
                             <img
                               src={i.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=150&q=80"}

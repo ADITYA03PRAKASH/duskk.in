@@ -13,7 +13,19 @@ export async function validateAndCalculateCart(
   }
 
   const productIds = Array.from(
-    new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id)))
+    new Set(
+      items
+        .filter((i) => !i.comboId && Boolean(i.productId))
+        .map((i) => i.productId as string)
+    )
+  );
+
+  const comboIds = Array.from(
+    new Set(
+      items
+        .filter((i) => Boolean(i.comboId))
+        .map((i) => i.comboId as string)
+    )
   );
 
   let products: any[] = [];
@@ -56,13 +68,184 @@ export async function validateAndCalculateCart(
     }
   }
 
+  let combos: any[] = [];
+  if (comboIds.length > 0) {
+    try {
+      const { data: dbCombos, error: comboError } = await supabaseAdmin
+        .from("combos")
+        .select(`
+          id,
+          title,
+          slug,
+          price,
+          mrp,
+          image_url,
+          gallery_images,
+          is_active,
+          combo_items (
+            id,
+            product_id,
+            variant_id,
+            quantity,
+            sort_order,
+            products (
+              id,
+              title,
+              slug,
+              sku,
+              base_price,
+              sale_price,
+              status,
+              product_images (
+                image_url,
+                is_primary,
+                display_order
+              ),
+              product_variants (
+                id,
+                sku,
+                title,
+                stock_quantity,
+                reserved_quantity,
+                is_active
+              )
+            ),
+            product_variants (
+              id,
+              sku,
+              title,
+              stock_quantity,
+              reserved_quantity,
+              is_active
+            )
+          )
+        `)
+        .in("id", comboIds);
+
+      if (!comboError && dbCombos) {
+        combos = dbCombos;
+      }
+    } catch (err) {
+      console.warn("Pricing cart validation combo lookup fallback:", err);
+    }
+  }
+
   const productMap = new Map(products.map((p) => [p.id, p]));
+  const comboMap = new Map(combos.map((c) => [c.id, c]));
 
   let subtotal = 0;
   const validatedItems: PriceBreakdown["validatedItems"] = [];
 
   for (const item of items) {
     const itemQuantity = Math.max(1, item.quantity || 1);
+
+    // 1. Handle Combo Items
+    if (item.comboId) {
+      const combo = comboMap.get(item.comboId);
+      if (!combo) {
+        throw new Error("Selected combo is unavailable or does not exist.");
+      }
+
+      if (!combo.is_active) {
+        throw new Error(`Combo "${combo.title}" is no longer active for purchase.`);
+      }
+
+      const comboItemsList: any[] = combo.combo_items || [];
+      if (comboItemsList.length === 0) {
+        throw new Error(`Combo "${combo.title}" does not contain any active items.`);
+      }
+
+      let maxCombosPossible = 999;
+      let computedComponentMrp = 0;
+      const comboComponents: {
+        productId: string;
+        variantId?: string | null;
+        quantity: number;
+        name: string;
+        sku: string;
+      }[] = [];
+
+      for (const ci of comboItemsList) {
+        const prod = ci.products;
+        if (!prod || prod.status !== "active") {
+          throw new Error(
+            `Product "${prod?.title || ci.product_id}" in "${combo.title}" is currently unavailable.`
+          );
+        }
+
+        const compQtyPerCombo = Math.max(1, ci.quantity || 1);
+        const totalCompQtyNeeded = itemQuantity * compQtyPerCombo;
+
+        let compVariant = ci.product_variants;
+        if (!compVariant && Array.isArray(prod.product_variants)) {
+          compVariant = prod.product_variants.find((v: any) => v.is_active) || prod.product_variants[0];
+        }
+
+        let compAvailableStock = 0;
+        if (compVariant) {
+          compAvailableStock = Math.max(0, (compVariant.stock_quantity || 0) - (compVariant.reserved_quantity || 0));
+        } else {
+          compAvailableStock = 50; // fallback if untracked
+        }
+
+        const combosSupported = Math.floor(compAvailableStock / compQtyPerCombo);
+        if (combosSupported < maxCombosPossible) {
+          maxCombosPossible = combosSupported;
+        }
+
+        if (compAvailableStock < totalCompQtyNeeded) {
+          throw new Error(
+            `Insufficient stock for "${prod.title}" inside "${combo.title}". Only ${combosSupported} combos can be fulfilled.`
+          );
+        }
+
+        computedComponentMrp += Number(prod.base_price || prod.sale_price || 0) * compQtyPerCombo;
+
+        comboComponents.push({
+          productId: prod.id,
+          variantId: compVariant?.id || null,
+          quantity: compQtyPerCombo,
+          name: prod.title,
+          sku: compVariant?.sku || prod.sku,
+        });
+      }
+
+      const comboPrice = Number(combo.price);
+      let comboMrp = Number(combo.mrp || 0);
+      if (!comboMrp || comboMrp < comboPrice) {
+        comboMrp = computedComponentMrp > comboPrice ? computedComponentMrp : Math.round(comboPrice * 1.3);
+      }
+
+      const itemSubtotal = comboPrice * itemQuantity;
+      subtotal += itemSubtotal;
+
+      const comboImg =
+        combo.image_url ||
+        (Array.isArray(combo.gallery_images) ? combo.gallery_images[0] : null) ||
+        (comboItemsList[0]?.products?.product_images as any[])?.[0]?.image_url ||
+        "/placeholder.jpg";
+
+      validatedItems.push({
+        productId: null,
+        comboId: combo.id,
+        isCombo: true,
+        variantId: null,
+        name: `[Combo] ${combo.title}`,
+        variantTitle: `${comboItemsList.length} items set`,
+        sku: `COMBO-${combo.slug.toUpperCase()}`,
+        image: comboImg,
+        price: comboPrice,
+        mrp: comboMrp,
+        quantity: itemQuantity,
+        subtotal: itemSubtotal,
+        availableStock: maxCombosPossible,
+        comboComponents,
+      });
+
+      continue;
+    }
+
+    // 2. Handle Standard Product Items
     const prod = productMap.get(item.productId || "");
     const prodTitle = prod?.title || (item as any).name || (item as any).title || "DUSKK Jewellery Item";
 

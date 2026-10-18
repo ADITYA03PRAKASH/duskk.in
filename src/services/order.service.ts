@@ -108,7 +108,8 @@ export async function initiateCheckoutOrder(
   // 8. Insert Order Items
   const orderItemsData = calculation.validatedItems.map((item) => ({
     order_id: orderId,
-    product_id: item.productId,
+    product_id: item.productId || null,
+    combo_id: item.comboId || null,
     variant_id: item.variantId || null,
     product_title: item.name,
     variant_title: item.variantTitle || null,
@@ -125,13 +126,26 @@ export async function initiateCheckoutOrder(
     console.error("Order items insert error:", itemsError);
   }
 
-  // 9. Concurrency-Safe Inventory Reservation RPC
-  const reservationPayload = calculation.validatedItems
-    .filter((i) => i.variantId)
-    .map((i) => ({
-      variant_id: i.variantId,
-      quantity: i.quantity,
-    }));
+  // 9. Concurrency-Safe Inventory Reservation RPC (Supports both individual items and combo components)
+  const reservationMap = new Map<string, number>();
+
+  for (const item of calculation.validatedItems) {
+    if (item.isCombo && item.comboComponents) {
+      for (const comp of item.comboComponents) {
+        if (comp.variantId) {
+          const qty = item.quantity * comp.quantity;
+          reservationMap.set(comp.variantId, (reservationMap.get(comp.variantId) || 0) + qty);
+        }
+      }
+    } else if (item.variantId) {
+      reservationMap.set(item.variantId, (reservationMap.get(item.variantId) || 0) + item.quantity);
+    }
+  }
+
+  const reservationPayload = Array.from(reservationMap.entries()).map(([variant_id, quantity]) => ({
+    variant_id,
+    quantity,
+  }));
 
   if (reservationPayload.length > 0) {
     try {

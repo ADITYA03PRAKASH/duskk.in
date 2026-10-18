@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface CartItem {
   productId: string;
+  comboId?: string;
+  isCombo?: boolean;
   variantId?: string | null;
   variantTitle?: string | null;
   name: string;
@@ -18,8 +20,9 @@ export interface CartItem {
 interface CartContextType {
   items: CartItem[];
   addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  addComboToCart: (combo: any, quantity?: number) => void;
+  removeItem: (idOrKey: string) => void;
+  updateQuantity: (idOrKey: string, quantity: number) => void;
   clearCart: () => void;
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
@@ -32,6 +35,11 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = "duskk_shopping_cart_v1";
+
+function getCartItemKey(item: { productId: string; comboId?: string; variantId?: string | null }): string {
+  if (item.comboId) return `combo_${item.comboId}`;
+  return `${item.productId}_${item.variantId || "default"}`;
+}
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -64,12 +72,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items, isInitialized]);
 
   const addItem = (itemData: Omit<CartItem, "quantity">, quantity: number = 1) => {
+    const targetKey = getCartItemKey(itemData);
     setItems((prev) => {
-      const existing = prev.find((i) => i.productId === itemData.productId);
+      const existing = prev.find((i) => getCartItemKey(i) === targetKey);
       if (existing) {
         const newQty = Math.min(existing.quantity + quantity, itemData.stockQuantity || 99);
         return prev.map((i) =>
-          i.productId === itemData.productId ? { ...i, quantity: newQty } : i
+          getCartItemKey(i) === targetKey ? { ...i, quantity: newQty } : i
         );
       }
       return [
@@ -83,21 +92,55 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setIsCartOpen(true);
   };
 
-  const removeItem = (productId: string) => {
-    setItems((prev) => prev.filter((i) => i.productId !== productId));
+  const addComboToCart = (combo: any, quantity: number = 1) => {
+    addItem(
+      {
+        productId: combo.id,
+        comboId: combo.id,
+        isCombo: true,
+        variantId: null,
+        variantTitle: `${combo.items?.length || combo.itemsCount || 0} pieces set`,
+        name: combo.title,
+        sku: `COMBO-${(combo.slug || combo.id).toUpperCase()}`,
+        price: Number(combo.price),
+        mrp: Number(combo.mrp || combo.price),
+        image:
+          combo.imageUrl ||
+          combo.image_url ||
+          (Array.isArray(combo.galleryImages) ? combo.galleryImages[0] : null) ||
+          "/placeholder.jpg",
+        stockQuantity: 25,
+      },
+      quantity
+    );
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const removeItem = (idOrKey: string) => {
+    setItems((prev) =>
+      prev.filter(
+        (i) =>
+          getCartItemKey(i) !== idOrKey &&
+          i.productId !== idOrKey &&
+          i.comboId !== idOrKey
+      )
+    );
+  };
+
+  const updateQuantity = (idOrKey: string, quantity: number) => {
     if (quantity <= 0) {
-      removeItem(productId);
+      removeItem(idOrKey);
       return;
     }
     setItems((prev) =>
-      prev.map((i) =>
-        i.productId === productId
+      prev.map((i) => {
+        const match =
+          getCartItemKey(i) === idOrKey ||
+          i.productId === idOrKey ||
+          i.comboId === idOrKey;
+        return match
           ? { ...i, quantity: Math.min(quantity, i.stockQuantity || 99) }
-          : i
-      )
+          : i;
+      })
     );
   };
 
@@ -116,6 +159,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       value={{
         items,
         addItem,
+        addComboToCart,
         removeItem,
         updateQuantity,
         clearCart,

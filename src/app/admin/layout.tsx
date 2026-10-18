@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
+  Gift,
   Layers,
   ShoppingBag,
   Users,
@@ -61,6 +62,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { name: "Dashboard", href: isLocalAdmin ? "/admin" : "/", slug: "", icon: LayoutDashboard },
     { name: "Products", href: isLocalAdmin ? "/admin/products" : "/products", slug: "products", icon: Package },
+    { name: "Combos", href: isLocalAdmin ? "/admin/combos" : "/combos", slug: "combos", icon: Gift },
     { name: "Categories", href: isLocalAdmin ? "/admin/categories" : "/categories", slug: "categories", icon: Layers },
     { name: "Orders", href: isLocalAdmin ? "/admin/orders" : "/orders", slug: "orders", icon: ShoppingBag },
     { name: "Customers (CRM)", href: isLocalAdmin ? "/admin/customers" : "/customers", slug: "customers", icon: Users },
