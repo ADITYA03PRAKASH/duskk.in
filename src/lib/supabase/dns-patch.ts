@@ -9,7 +9,7 @@
 // 4. Strict TLS Verification: Preserves Node's native TLS SNI and certificate validation (checkServerIdentity)
 //    confirming that the remote server presents a valid certificate for *.supabase.co.
 
-if (typeof window === "undefined") {
+if (typeof window === "undefined" && process.env.VERCEL !== "1") {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const dns = require("dns");

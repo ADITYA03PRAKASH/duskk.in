@@ -6,7 +6,7 @@ const supabaseUrl =
 const serviceRoleOrAnonKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "duskk_build_placeholder_key";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5Z3ZvenJkcXByb2txZ2FwZ254Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3MDI3ODQsImV4cCI6MjEwNTI3ODc4NH0.47WcDVA4IMWIW2ZtOCHGLdbifCXPT4UGrYbdTgoF_fU";
 
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
   console.warn(
