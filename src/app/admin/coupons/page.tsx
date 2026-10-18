@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { formatPrice } from "@/lib/utils";
-import { Tag, Plus, Check, X, Loader2 } from "lucide-react";
+import { Tag, Plus, Check, X, Loader2, Trash2, Power } from "lucide-react";
 
 export default function AdminCouponsPage() {
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -34,6 +34,43 @@ export default function AdminCouponsPage() {
   useEffect(() => {
     loadCoupons();
   }, []);
+
+  const handleToggleStatus = async (coupon: any) => {
+    try {
+      const res = await fetch("/api/admin/coupons", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: coupon.id, active: !coupon.active }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCoupons((prev) =>
+          prev.map((c) => (c.id === coupon.id ? { ...c, active: !c.active } : c))
+        );
+      } else {
+        alert(data.message || "Failed to update coupon status");
+      }
+    } catch {
+      alert("Network error toggling coupon status");
+    }
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this coupon code?")) return;
+    try {
+      const res = await fetch(`/api/admin/coupons?id=${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCoupons((prev) => prev.filter((c) => c.id !== id));
+      } else {
+        alert(data.message || "Failed to delete coupon");
+      }
+    } catch {
+      alert("Network error deleting coupon");
+    }
+  };
 
   const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +142,7 @@ export default function AdminCouponsPage() {
                   <th className="py-3 px-4">Max Discount Cap</th>
                   <th className="py-3 px-4">Usage Count</th>
                   <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-duskk-100">
@@ -131,9 +169,37 @@ export default function AdminCouponsPage() {
                     </td>
 
                     <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
-                        ACTIVE
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          c.active
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-zinc-100 text-zinc-600"
+                        }`}
+                      >
+                        {c.active ? "ACTIVE" : "INACTIVE"}
                       </span>
+                    </td>
+
+                    <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                      <button
+                        onClick={() => handleToggleStatus(c)}
+                        title={c.active ? "Deactivate coupon" : "Activate coupon"}
+                        className={`px-2.5 py-1 text-[11px] font-medium rounded transition border ${
+                          c.active
+                            ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        }`}
+                      >
+                        {c.active ? "Deactivate" : "Activate"}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteCoupon(c.id)}
+                        title="Delete coupon"
+                        className="p-1 text-duskk-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 inline" />
+                      </button>
                     </td>
                   </tr>
                 ))}

@@ -73,9 +73,11 @@ export default async function HomePage() {
                   <div className="relative aspect-square w-full overflow-hidden bg-duskk-100 mb-3">
                     <img
                       src={
-                        cat.slug === "earrings"
+                        cat.image_url ||
+                        cat.image ||
+                        (cat.slug === "earrings"
                           ? "https://i.pinimg.com/736x/f3/6c/23/f36c237d407964256dbd7ca71a760284.jpg"
-                          : cat.image_url || cat.image || "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80"
+                          : "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80")
                       }
                       alt={cat.name}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"

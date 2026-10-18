@@ -66,11 +66,9 @@ export async function validateAndCalculateCart(
     const prod = productMap.get(item.productId || "");
     const prodTitle = prod?.title || (item as any).name || (item as any).title || "DUSKK Jewellery Item";
 
-    let itemPrice = prod
-      ? (prod.sale_price !== null ? Number(prod.sale_price) : Number(prod.base_price))
-      : Number((item as any).price || 2599);
-    let itemMrp = prod ? Number(prod.base_price) : Number((item as any).mrp || itemPrice);
-    let itemSku = prod?.sku || (item as any).sku || `DSK-${Date.now().toString().slice(-4)}`;
+    let itemPrice: number;
+    let itemMrp: number;
+    let itemSku: string;
     let variantTitle: string | null = null;
     let availableStock = 99;
 
@@ -79,23 +77,46 @@ export async function validateAndCalculateCart(
       (prod?.product_images as any[])?.[0];
     let itemImage = primaryImgObj?.image_url || (item as any).image || "/placeholder.jpg";
 
-    if (item.variantId && prod) {
-      const variant = (prod.product_variants as any[])?.find(
-        (v) => v.id === item.variantId && v.is_active
-      );
-      if (variant) {
+    if (prod) {
+      if (prod.status !== "active") {
+        throw new Error(`"${prod.title}" is no longer available for purchase.`);
+      }
+      itemPrice = prod.sale_price !== null ? Number(prod.sale_price) : Number(prod.base_price);
+      itemMrp = Number(prod.base_price);
+      itemSku = prod.sku;
+
+      const activeVariants = (prod.product_variants as any[])?.filter((v: any) => v.is_active) || [];
+      if (item.variantId) {
+        const variant = activeVariants.find((v: any) => v.id === item.variantId);
+        if (!variant) {
+          throw new Error(`Requested variant for "${prodTitle}" is unavailable.`);
+        }
         variantTitle = variant.title;
         itemSku = variant.sku || prod.sku;
         if (variant.image_url) itemImage = variant.image_url;
-
         if (variant.sale_price_override !== null && variant.sale_price_override !== undefined) {
           itemPrice = Number(variant.sale_price_override);
         } else if (variant.price_override !== null && variant.price_override !== undefined) {
           itemPrice = Number(variant.price_override);
         }
-
         availableStock = Math.max(0, variant.stock_quantity - (variant.reserved_quantity || 0));
+      } else if (activeVariants.length > 0) {
+        availableStock = activeVariants.reduce(
+          (acc: number, v: any) => acc + Math.max(0, v.stock_quantity - (v.reserved_quantity || 0)),
+          0
+        );
       }
+    } else {
+      const isMockAllowed =
+        process.env.NODE_ENV === "development" && process.env.ENABLE_MOCK_FALLBACK === "true";
+      if (!isMockAllowed) {
+        throw new Error(
+          `Product "${(item as any).name || (item as any).title || item.productId}" is not available in the active catalog.`
+        );
+      }
+      itemPrice = Number((item as any).price || 2599);
+      itemMrp = Number((item as any).mrp || itemPrice);
+      itemSku = (item as any).sku || `DSK-${Date.now().toString().slice(-4)}`;
     }
 
     if (availableStock < itemQuantity) {

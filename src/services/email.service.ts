@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter, type SendMailOptions } from "nodemailer";
 import { formatPrice } from "@/lib/utils";
 
 const DUSKK_NOTIFICATION_EMAIL = "duskk.india@gmail.com";
@@ -13,7 +13,7 @@ function getSiteUrl(): string {
 }
 
 // Serverless-safe Transporter Creator (Fresh socket per request to avoid stale pool disconnects)
-function createTransporter(targetPort?: number): nodemailer.Transporter | null {
+function createTransporter(targetPort?: number): Transporter | null {
   const host = (
     process.env.SMTP_HOST ||
     process.env.BREVO_SMTP_HOST ||
@@ -110,7 +110,7 @@ export interface EmailSendResult {
 }
 
 // Resilient SendMail with Port 587 -> Port 465 fallback and structured error capture
-export async function executeSendMailDetailed(mailOptions: nodemailer.SendMailOptions): Promise<EmailSendResult> {
+export async function executeSendMailDetailed(mailOptions: SendMailOptions): Promise<EmailSendResult> {
   const preferredPort = parseInt(
     (process.env.SMTP_PORT || "587").toString().replace(/^["']|["']$/g, "").trim(),
     10
@@ -181,7 +181,7 @@ export async function executeSendMailDetailed(mailOptions: nodemailer.SendMailOp
   }
 }
 
-async function executeSendMail(mailOptions: nodemailer.SendMailOptions): Promise<boolean> {
+async function executeSendMail(mailOptions: SendMailOptions): Promise<boolean> {
   const result = await executeSendMailDetailed(mailOptions);
   return result.success;
 }

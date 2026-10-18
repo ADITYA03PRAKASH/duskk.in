@@ -155,7 +155,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const prodSlug = slug || prodTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    let prodSlug = slug || prodTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const { data: existingSlug } = await supabaseAdmin
+      .from("products")
+      .select("id")
+      .eq("slug", prodSlug)
+      .maybeSingle();
+
+    if (existingSlug) {
+      prodSlug = `${prodSlug}-${Date.now().toString().slice(-4)}`;
+    }
+
     const prodSku = sku || `DSK-${Date.now().toString().slice(-6)}`;
 
     const specs = specifications || {

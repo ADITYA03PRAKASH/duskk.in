@@ -197,26 +197,29 @@ export async function PUT(
     }
 
     // Update primary image if provided
-    if (images && Array.isArray(images) && images.length > 0 && images[0]?.url) {
-      const imgUrl = images[0].url;
-      const { data: existingImgs } = await supabaseAdmin
-        .from("product_images")
-        .select("id")
-        .eq("product_id", params.id);
-
-      if (existingImgs && existingImgs.length > 0) {
-        await supabaseAdmin
+    if (images && Array.isArray(images) && images.length > 0) {
+      const rawImg = images[0];
+      const imgUrl = typeof rawImg === "string" ? rawImg : (rawImg?.url || rawImg?.image_url);
+      if (imgUrl) {
+        const { data: existingImgs } = await supabaseAdmin
           .from("product_images")
-          .update({ image_url: imgUrl, updated_at: new Date().toISOString() })
-          .eq("id", existingImgs[0].id);
-      } else {
-        await supabaseAdmin.from("product_images").insert({
-          product_id: params.id,
-          image_url: imgUrl,
-          alt_text: updated.title || "",
-          display_order: 0,
-          is_primary: true,
-        });
+          .select("id")
+          .eq("product_id", params.id);
+
+        if (existingImgs && existingImgs.length > 0) {
+          await supabaseAdmin
+            .from("product_images")
+            .update({ image_url: imgUrl, updated_at: new Date().toISOString() })
+            .eq("id", existingImgs[0].id);
+        } else {
+          await supabaseAdmin.from("product_images").insert({
+            product_id: params.id,
+            image_url: imgUrl,
+            alt_text: updated.title || "",
+            display_order: 0,
+            is_primary: true,
+          });
+        }
       }
     }
 

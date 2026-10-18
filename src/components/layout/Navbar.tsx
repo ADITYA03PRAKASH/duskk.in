@@ -77,13 +77,40 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
     }
   };
 
+  const [categories, setCategories] = useState<{ name: string; slug: string }[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((resData) => {
+        if (isMounted && resData.success && Array.isArray(resData.data) && resData.data.length > 0) {
+          setCategories(
+            resData.data
+              .filter((c: any) => c.is_active !== false)
+              .map((c: any) => ({ name: c.name.toUpperCase(), slug: c.slug }))
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to load categories for nav:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const allNavLinks = [
     { name: "SHOP ALL", href: "/shop" },
-    { name: "EARRINGS", href: "/category/earrings" },
-    { name: "NECKLACES", href: "/category/necklaces" },
-    { name: "PAYALS", href: "/category/payals" },
-    { name: "RINGS", href: "/category/rings" },
-    { name: "BRACELETS", href: "/category/bracelets" },
+    ...(categories.length > 0
+      ? categories.map((c) => ({ name: c.name, href: `/category/${c.slug}` }))
+      : [
+          { name: "EARRINGS", href: "/category/earrings" },
+          { name: "NECKLACES", href: "/category/necklaces" },
+          { name: "PAYALS", href: "/category/payals" },
+          { name: "RINGS", href: "/category/rings" },
+          { name: "BRACELETS", href: "/category/bracelets" },
+        ]),
     { name: "ABOUT", href: "/about" },
   ];
 

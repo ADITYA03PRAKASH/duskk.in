@@ -464,9 +464,10 @@ export async function trackCustomerOrder(orderNumber: string, email: string): Pr
     }
   }
 
-  // If still not found in live DB (or offline/demo testing), provide rich mock result for DUSK orders
+  // If still not found in live DB (or offline/demo testing), provide rich mock result for DUSK orders ONLY when mock fallback is explicitly enabled in development
   if (!orderData) {
-    if (normalizedOrderNumber.startsWith("DUSK-") || normalizedOrderNumber.startsWith("ORD-")) {
+    const isMockAllowed = process.env.NODE_ENV === "development" && process.env.ENABLE_MOCK_FALLBACK === "true";
+    if (isMockAllowed && (normalizedOrderNumber.startsWith("DUSK-") || normalizedOrderNumber.startsWith("ORD-"))) {
       return {
         orderNumber: normalizedOrderNumber,
         orderStatus: "SHIPPED",
