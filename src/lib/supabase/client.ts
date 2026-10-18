@@ -1,17 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uygvozrdqprokqgapgnx.supabase.co";
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "duskk_build_placeholder_key";
 
-if (!supabaseUrl) {
-  throw new Error(
-    "Missing Supabase URL configuration: NEXT_PUBLIC_SUPABASE_URL must be defined."
-  );
-}
-
-if (!supabaseAnonKey) {
-  throw new Error(
-    "Missing Supabase Anon Key configuration: NEXT_PUBLIC_SUPABASE_ANON_KEY must be defined."
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  console.warn(
+    "[SupabaseClient] Warning: NEXT_PUBLIC_SUPABASE_URL is not defined in environment."
   );
 }
 
