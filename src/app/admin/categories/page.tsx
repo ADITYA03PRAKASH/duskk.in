@@ -17,6 +17,9 @@ export default function AdminCategoriesPage() {
   const [sortOrder, setSortOrder] = useState("0");
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [conflictCategory, setConflictCategory] = useState<any | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,6 +71,8 @@ export default function AdminCategoriesPage() {
     setImage("https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=600&q=80");
     setSortOrder("1");
     setActive(true);
+    setErrorMsg("");
+    setConflictCategory(null);
     setIsModalOpen(true);
   };
 
@@ -79,12 +84,48 @@ export default function AdminCategoriesPage() {
     setImage(c.image || c.image_url || "");
     setSortOrder((c.sortOrder ?? c.display_order ?? 0).toString());
     setActive(c.active !== undefined ? c.active : (c.is_active !== undefined ? c.is_active : true));
+    setErrorMsg("");
+    setConflictCategory(null);
     setIsModalOpen(true);
+  };
+
+  const handleRestoreExisting = async () => {
+    if (!conflictCategory?.id) return;
+    setRestoring(true);
+    try {
+      const res = await fetch(`/api/admin/categories/${conflictCategory.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          active: true,
+          isActive: true,
+          name: name || conflictCategory.name,
+          description: description || undefined,
+          image: image || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsModalOpen(false);
+        setErrorMsg("");
+        setConflictCategory(null);
+        await loadCategories();
+      } else {
+        setErrorMsg(data.message || "Failed to restore existing category");
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || "Network error restoring category");
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setErrorMsg("");
+    setConflictCategory(null);
+
     try {
       const url = editingCategory
         ? `/api/admin/categories/${editingCategory.id}`
@@ -110,27 +151,42 @@ export default function AdminCategoriesPage() {
       const data = await res.json();
       if (res.ok && data.success !== false) {
         setIsModalOpen(false);
+        setErrorMsg("");
+        setConflictCategory(null);
         loadCategories();
       } else {
-        alert(data.message || "Failed to save category");
+        setErrorMsg(data.message || "Failed to save category");
+        if (data.code === "INACTIVE_SLUG_CONFLICT" && data.existingCategory) {
+          setConflictCategory(data.existingCategory);
+        }
       }
     } catch (e: any) {
       console.error(e);
-      alert(e.message || "Failed to save category");
+      setErrorMsg(e.message || "Network error while saving category");
     } finally {
       setSaving(false);
     }
   };
 
+
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this category?")) return;
     try {
-      await fetch(`/api/admin/categories/${id}`, { method: "DELETE" });
-      loadCategories();
-    } catch (e) {
-      console.error(e);
+      const res = await fetch(`/api/admin/categories/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        setCategories((prev) => prev.filter((c) => c.id !== id));
+      } else {
+        alert(data.message || "Failed to delete category");
+      }
+      await loadCategories();
+    } catch (e: any) {
+      console.error("Delete category error:", e);
+      alert(e.message || "Network error deleting category.");
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -222,6 +278,29 @@ export default function AdminCategoriesPage() {
             </div>
 
             <form onSubmit={handleSave} className="p-6 space-y-3 text-xs">
+              {errorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="leading-relaxed">{errorMsg}</span>
+                  </div>
+                  {conflictCategory && !conflictCategory.isActive && (
+                    <div className="pt-2 border-t border-rose-200/80 flex items-center justify-between">
+                      <span className="text-[11px] text-rose-700 font-semibold">
+                        Reactivate existing category record?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleRestoreExisting}
+                        disabled={restoring}
+                        className="px-2.5 py-1 bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white font-mono text-[10px] font-semibold uppercase tracking-wider rounded transition"
+                      >
+                        {restoring ? "Restoring..." : "Restore Category"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block font-semibold mb-1">Category Name *</label>
                 <input

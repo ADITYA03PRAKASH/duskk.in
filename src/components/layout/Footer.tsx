@@ -110,9 +110,6 @@ export function Footer() {
                   USKK
                 </span>
               </div>
-              <span className="block text-[9px] tracking-[0.4em] uppercase text-duskk-gold font-sans mt-1">
-                Elegance Crafted for You
-              </span>
             </Link>
             <p className="text-xs text-duskk-300 leading-relaxed max-w-sm">
               Thoughtful Gifts. Meaningful Moments. DUSKK brings together curated lifestyle gifts and products to make every occasion, celebration, and surprise unforgettable.

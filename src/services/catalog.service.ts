@@ -25,6 +25,16 @@ export async function withTimeout<T>(promise: PromiseLike<T>, ms: number = 8000)
   ]);
 }
 
+/**
+ * Gated fallback helper: Mock fallback data is permitted ONLY in development
+ * when ENABLE_MOCK_FALLBACK === "true". Production and standard environments
+ * will never silently substitute mock constants for database failures.
+ */
+function isMockFallbackEnabled(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.ENABLE_MOCK_FALLBACK === "true";
+}
+
+
 export const FALLBACK_CATEGORIES = [
   {
     id: "3996bb4c-bf64-4a14-a584-9591aff2bf5d",
@@ -366,32 +376,48 @@ export async function getProducts(params: ProductQueryParams) {
 
     const { data, count, error } = await withTimeout(query, 8000);
 
-    const hasFilters = Boolean(category || search || featured || bestSeller || newArrival || minPrice !== undefined || maxPrice !== undefined);
-
-    if (error || !data || (data.length === 0 && !hasFilters)) {
-      let fallbackList = [...FALLBACK_PRODUCTS];
-      if (category) {
-        fallbackList = fallbackList.filter((p) => p.category?.slug === category);
+    if (error) {
+      console.error(`[CatalogService.getProducts] Supabase query error: ${error.message} (Code: ${error.code || "UNKNOWN"})`);
+      if (isMockFallbackEnabled()) {
+        console.warn("[CatalogService.getProducts] Gated fallback active in development mode.");
+        let fallbackList = [...FALLBACK_PRODUCTS];
+        if (category) fallbackList = fallbackList.filter((p) => p.category?.slug === category);
+        if (featured) fallbackList = fallbackList.filter((p) => p.featured);
+        if (bestSeller) fallbackList = fallbackList.filter((p) => p.bestSeller);
+        if (newArrival) fallbackList = fallbackList.filter((p) => p.newArrival);
+        if (minPrice) fallbackList = fallbackList.filter((p) => p.price >= minPrice);
+        if (maxPrice) fallbackList = fallbackList.filter((p) => p.price <= maxPrice);
+        if (search && search.trim()) {
+          const q = search.trim().toLowerCase();
+          fallbackList = fallbackList.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+        }
+        if (sort === "price_asc") fallbackList.sort((a, b) => a.price - b.price);
+        if (sort === "price_desc") fallbackList.sort((a, b) => b.price - a.price);
+        return {
+          products: fallbackList,
+          total: fallbackList.length,
+          page,
+          limit,
+          totalPages: Math.ceil(fallbackList.length / limit) || 1,
+        };
       }
-      if (featured) fallbackList = fallbackList.filter((p) => p.featured);
-      if (bestSeller) fallbackList = fallbackList.filter((p) => p.bestSeller);
-      if (newArrival) fallbackList = fallbackList.filter((p) => p.newArrival);
-      if (minPrice) fallbackList = fallbackList.filter((p) => p.price >= minPrice);
-      if (maxPrice) fallbackList = fallbackList.filter((p) => p.price <= maxPrice);
-      if (search && search.trim()) {
-        const q = search.trim().toLowerCase();
-        fallbackList = fallbackList.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
-      }
-
-      if (sort === "price_asc") fallbackList.sort((a, b) => a.price - b.price);
-      if (sort === "price_desc") fallbackList.sort((a, b) => b.price - a.price);
-
       return {
-        products: fallbackList,
-        total: fallbackList.length,
+        products: [],
+        total: 0,
         page,
         limit,
-        totalPages: Math.ceil(fallbackList.length / limit) || 1,
+        totalPages: 0,
+      };
+    }
+
+    // Legitimate empty results (e.g. no products matching filter or empty catalog)
+    if (!data || data.length === 0) {
+      return {
+        products: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
       };
     }
 
@@ -450,17 +476,28 @@ export async function getProducts(params: ProductQueryParams) {
       limit,
       totalPages: Math.ceil((count || formattedProducts.length) / limit),
     };
-  } catch (err) {
-    let fallbackList = [...FALLBACK_PRODUCTS];
-    if (params.category) {
-      fallbackList = fallbackList.filter((p) => p.category?.slug === params.category);
+  } catch (err: any) {
+    console.error(`[CatalogService.getProducts] Exception or timeout: ${err?.message || "Unknown error"}`);
+    if (isMockFallbackEnabled()) {
+      console.warn("[CatalogService.getProducts] Gated fallback active on exception in development mode.");
+      let fallbackList = [...FALLBACK_PRODUCTS];
+      if (params.category) {
+        fallbackList = fallbackList.filter((p) => p.category?.slug === params.category);
+      }
+      return {
+        products: fallbackList,
+        total: fallbackList.length,
+        page: params.page || 1,
+        limit: params.limit || 40,
+        totalPages: 1,
+      };
     }
     return {
-      products: fallbackList,
-      total: fallbackList.length,
+      products: [],
+      total: 0,
       page: params.page || 1,
       limit: params.limit || 40,
-      totalPages: 1,
+      totalPages: 0,
     };
   }
 }
@@ -528,9 +565,17 @@ export async function getProductBySlug(slug: string) {
       8000
     );
 
-    if (error || !product) {
-      const fb = FALLBACK_PRODUCTS.find((p) => p.slug === slug);
-      if (fb) return fb;
+    if (error) {
+      console.error(`[CatalogService.getProductBySlug] Supabase query error for slug "${slug}": ${error.message} (Code: ${error.code || "UNKNOWN"})`);
+      if (isMockFallbackEnabled()) {
+        console.warn(`[CatalogService.getProductBySlug] Gated fallback active for slug "${slug}" in development mode.`);
+        return FALLBACK_PRODUCTS.find((p) => p.slug === slug) || null;
+      }
+      return null;
+    }
+
+    if (!product) {
+      // Legitimate missing slug (e.g. invalid URL or deleted product) -> Return null for 404
       return null;
     }
 
@@ -580,8 +625,13 @@ export async function getProductBySlug(slug: string) {
       metaTitle: product.meta_title,
       metaDescription: product.meta_description,
     };
-  } catch {
-    return FALLBACK_PRODUCTS.find((p) => p.slug === slug) || null;
+  } catch (err: any) {
+    console.error(`[CatalogService.getProductBySlug] Exception or timeout for slug "${slug}": ${err?.message || "Unknown error"}`);
+    if (isMockFallbackEnabled()) {
+      console.warn(`[CatalogService.getProductBySlug] Gated fallback active on exception for slug "${slug}" in development mode.`);
+      return FALLBACK_PRODUCTS.find((p) => p.slug === slug) || null;
+    }
+    return null;
   }
 }
 
@@ -596,8 +646,17 @@ export async function getCategories() {
       8000
     );
 
-    if (error || !data || data.length === 0) {
-      return FALLBACK_CATEGORIES;
+    if (error) {
+      console.error(`[CatalogService.getCategories] Supabase query error: ${error.message} (Code: ${error.code || "UNKNOWN"})`);
+      if (isMockFallbackEnabled()) {
+        console.warn("[CatalogService.getCategories] Gated fallback active in development mode.");
+        return FALLBACK_CATEGORIES;
+      }
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
     }
 
     const parentCategories = (data || []).filter((c) => !c.parent_id);
@@ -606,51 +665,58 @@ export async function getCategories() {
       subcategories: (data || []).filter((c) => c.parent_id === parent.id),
     }));
 
-    return result.length > 0 ? result : FALLBACK_CATEGORIES;
-  } catch {
-    return FALLBACK_CATEGORIES;
+    return result;
+  } catch (err: any) {
+    console.error(`[CatalogService.getCategories] Exception or timeout: ${err?.message || "Unknown error"}`);
+    if (isMockFallbackEnabled()) {
+      console.warn("[CatalogService.getCategories] Gated fallback active on exception in development mode.");
+      return FALLBACK_CATEGORIES;
+    }
+    return [];
   }
 }
 
 export async function getCategoryBySlug(slug: string) {
   const normalizedSlug = slug.toLowerCase() === "payal" ? "payals" : slug;
   try {
+    let query = supabaseAdmin
+      .from("categories")
+      .select("*")
+      .eq("slug", normalizedSlug);
+
+    // Categories are active-only on storefront, with accessories permitted for dedicated collection showcase
+    if (normalizedSlug !== "accessories") {
+      query = query.eq("is_active", true);
+    }
+
     const { data, error } = await withTimeout(
-      supabaseAdmin
-        .from("categories")
-        .select("*")
-        .eq("slug", normalizedSlug)
-        .eq("is_active", true)
-        .single(),
+      query.maybeSingle(),
       8000
     );
 
-    if (!error && data) {
-      return data;
+    if (error) {
+      console.error(`[CatalogService.getCategoryBySlug] Supabase query error for slug "${slug}": ${error.message} (Code: ${error.code || "UNKNOWN"})`);
+      if (isMockFallbackEnabled()) {
+        console.warn(`[CatalogService.getCategoryBySlug] Gated fallback active for slug "${slug}" in development mode.`);
+        return FALLBACK_CATEGORIES.find((c) => c.slug === slug) || null;
+      }
+      return null;
     }
-  } catch {
-    // Timeout or DB error
+
+    if (!data) {
+      // Legitimate missing category slug -> Return null so caller triggers notFound()
+      return null;
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error(`[CatalogService.getCategoryBySlug] Exception or timeout for slug "${slug}": ${err?.message || "Unknown error"}`);
+    if (isMockFallbackEnabled()) {
+      console.warn(`[CatalogService.getCategoryBySlug] Gated fallback active on exception for slug "${slug}" in development mode.`);
+      return FALLBACK_CATEGORIES.find((c) => c.slug === slug) || null;
+    }
+    return null;
   }
-
-  const fallback = FALLBACK_CATEGORIES.find((c) => c.slug === slug);
-  if (fallback) {
-    return fallback;
-  }
-
-  const formattedName = slug
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-
-  return {
-    id: `cat_${slug}`,
-    name: formattedName,
-    slug: slug,
-    description: `Curated luxury pieces from our ${formattedName} collection.`,
-    image_url: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=600&q=80",
-    display_order: 99,
-    is_active: true,
-  };
 }
 
 export async function getBanners() {
@@ -664,7 +730,33 @@ export async function getBanners() {
       8000
     );
 
-    if (error || !data || data.length === 0) {
+    if (error) {
+      console.error(`[CatalogService.getBanners] Supabase query error: ${error.message} (Code: ${error.code || "UNKNOWN"})`);
+      if (isMockFallbackEnabled()) {
+        console.warn("[CatalogService.getBanners] Gated fallback active in development mode.");
+        return [
+          {
+            id: "banner_hero",
+            banner_type: "hero",
+            title: "Where Modern Allure Meets Timeless Craft",
+            subtitle: "Elevate your signature silhouette with artisanal jewelry crafted in demi-fine gold, authentic pearls, and celestial zircons.",
+            image_url_desktop: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1920&q=85",
+            link_url: "/shop",
+            is_active: true,
+          },
+        ];
+      }
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+    return data;
+  } catch (err: any) {
+    console.error(`[CatalogService.getBanners] Exception or timeout: ${err?.message || "Unknown error"}`);
+    if (isMockFallbackEnabled()) {
+      console.warn("[CatalogService.getBanners] Gated fallback active on exception in development mode.");
       return [
         {
           id: "banner_hero",
@@ -677,19 +769,7 @@ export async function getBanners() {
         },
       ];
     }
-    return data;
-  } catch {
-    return [
-      {
-        id: "banner_hero",
-        banner_type: "hero",
-        title: "Where Modern Allure Meets Timeless Craft",
-        subtitle: "Elevate your signature silhouette with artisanal jewelry crafted in demi-fine gold, authentic pearls, and celestial zircons.",
-        image_url_desktop: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1920&q=85",
-        link_url: "/shop",
-        is_active: true,
-      },
-    ];
+    return [];
   }
 }
 

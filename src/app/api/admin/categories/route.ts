@@ -12,26 +12,71 @@ const SEED_CATEGORIES = [
   { id: "d1aeca62-716c-4f03-a0bf-e8c2596ba051", name: "Accessories", slug: "accessories", display_order: 6, is_active: true },
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const admin = await getSessionAdmin();
     if (!admin) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const showAll = searchParams.get("showAll") === "true";
+
     try {
-      const { data: categories, error } = await supabaseAdmin
+      let query = supabaseAdmin
+        .from("categories")
+        .select(`
+          *,
+          products!products_category_id_fkey (id, status)
+        `)
+        .order("display_order", { ascending: true });
+
+      // By default, exclude deleted/deactivated categories in admin list
+      if (!showAll) {
+        query = query.eq("is_active", true);
+      }
+
+      const { data: categories, error } = await query;
+
+      if (!error && categories && categories.length > 0) {
+        return NextResponse.json({
+          success: true,
+          data: categories.map((c: any) => {
+            const activeProducts = (c.products || []).filter(
+              (p: any) => p.status !== "archived"
+            );
+            return {
+              ...c,
+              image: c.image_url,
+              sortOrder: c.display_order,
+              active: c.is_active,
+              _count: {
+                products: activeProducts.length,
+              },
+            };
+          }),
+        });
+      }
+
+      // If query failed with relationship or empty, fallback to simple select
+      let fallbackQuery = supabaseAdmin
         .from("categories")
         .select("*")
         .order("display_order", { ascending: true });
 
-      if (error || !categories || categories.length === 0) {
-        return NextResponse.json({ success: true, data: SEED_CATEGORIES });
+      if (!showAll) {
+        fallbackQuery = fallbackQuery.eq("is_active", true);
+      }
+
+      const { data: simpleCats, error: simpleErr } = await fallbackQuery;
+
+      if (simpleErr || !simpleCats || simpleCats.length === 0) {
+        return NextResponse.json({ success: true, data: showAll ? SEED_CATEGORIES : SEED_CATEGORIES.filter((c) => c.is_active) });
       }
 
       return NextResponse.json({
         success: true,
-        data: categories.map((c) => ({
+        data: simpleCats.map((c) => ({
           ...c,
           image: c.image_url,
           sortOrder: c.display_order,
@@ -45,6 +90,7 @@ export async function GET() {
     return NextResponse.json({ success: true, data: SEED_CATEGORIES });
   }
 }
+
 
 export async function POST(req: NextRequest) {
   try {
@@ -67,7 +113,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Category name is required" }, { status: 400 });
     }
 
-    const catSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const catSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-")).replace(/^-|-$/g, "");
+
+    // 1. Detect existing category with identical slug (active or inactive)
+    const { data: existingCat, error: checkError } = await supabaseAdmin
+      .from("categories")
+      .select("id, name, slug, is_active, display_order")
+      .eq("slug", catSlug)
+      .maybeSingle();
+
+    if (!checkError && existingCat) {
+      if (!existingCat.is_active) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "INACTIVE_SLUG_CONFLICT",
+            message: `A deactivated category named "${existingCat.name}" already uses the slug "${catSlug}". You can choose a different slug or restore the existing category.`,
+            existingCategory: {
+              id: existingCat.id,
+              name: existingCat.name,
+              slug: existingCat.slug,
+              isActive: existingCat.is_active,
+            },
+          },
+          { status: 409 }
+        );
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "SLUG_ALREADY_EXISTS",
+            message: `An active category named "${existingCat.name}" already uses the slug "${catSlug}". Please choose a unique slug.`,
+            existingCategory: {
+              id: existingCat.id,
+              name: existingCat.name,
+              slug: existingCat.slug,
+              isActive: existingCat.is_active,
+            },
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     const insertPayload: Record<string, any> = {
       name,
@@ -92,11 +179,22 @@ export async function POST(req: NextRequest) {
 
     if (error || !category) {
       console.error("Supabase category insert error:", error);
+      if (error?.code === "23505" || error?.message?.includes("categories_slug_key")) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "SLUG_ALREADY_EXISTS",
+            message: `A category with the slug "${catSlug}" already exists in the database. Please specify a different slug.`,
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { success: false, message: error?.message || "Failed to create category in database" },
         { status: 500 }
       );
     }
+
 
     try {
       revalidatePath("/", "page");

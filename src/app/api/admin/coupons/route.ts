@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -85,6 +86,12 @@ export async function POST(req: NextRequest) {
     if (error || !coupon) {
       console.error("Supabase coupon insert error:", error);
       throw new Error(error?.message || "Failed to create coupon in database");
+    }
+
+    try {
+      revalidatePath("/", "page");
+    } catch (revErr) {
+      console.warn("[CouponsRoute] Revalidation warning:", revErr);
     }
 
     return NextResponse.json({

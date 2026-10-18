@@ -6,15 +6,41 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { ShoppingBag, Search, Menu, X, Compass, Sparkles } from "lucide-react";
 import { D_LOGO_SRC } from "@/lib/logo";
+import type { PublicPromotionalCoupon } from "@/services/pricing.service";
 
-export function Navbar() {
+interface NavbarProps {
+  initialPromoCoupon?: PublicPromotionalCoupon | null;
+}
+
+export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
   const { itemCount, openCart } = useCart();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
+  const [promoCoupon, setPromoCoupon] = useState<PublicPromotionalCoupon | null>(
+    initialPromoCoupon ?? null
+  );
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    if (initialPromoCoupon !== undefined) return;
+    let isMounted = true;
+    fetch("/api/promotions/coupon")
+      .then((res) => res.json())
+      .then((resData) => {
+        if (isMounted && resData.success) {
+          setPromoCoupon(resData.data);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load promotional coupon:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [initialPromoCoupon]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -24,11 +50,24 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Close mobile menu on route change
+
+  // Close drawer & search on route change
   useEffect(() => {
-    setIsMobileMenuOpen(false);
+    setIsDrawerOpen(false);
     setIsSearchOpen(false);
   }, [pathname]);
+
+  // Prevent body scroll when drawer is open
+  useEffect(() => {
+    if (isDrawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isDrawerOpen]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,138 +77,117 @@ export function Navbar() {
     }
   };
 
-  const leftNavLinks = [
+  const allNavLinks = [
     { name: "SHOP ALL", href: "/shop" },
     { name: "EARRINGS", href: "/category/earrings" },
     { name: "NECKLACES", href: "/category/necklaces" },
     { name: "PAYALS", href: "/category/payals" },
-  ];
-
-  const rightNavLinks = [
     { name: "RINGS", href: "/category/rings" },
     { name: "BRACELETS", href: "/category/bracelets" },
     { name: "ABOUT", href: "/about" },
   ];
 
-  const allNavLinks = [...leftNavLinks, ...rightNavLinks];
-
   return (
     <>
       {/* Announcement Top Bar */}
       <div className="bg-duskk-900 text-duskk-champagne text-[11px] font-medium py-2 px-4 tracking-widest text-center uppercase flex items-center justify-center space-x-3 border-b border-white/10">
-        <Sparkles className="w-3.5 h-3.5 text-duskk-gold animate-pulse" />
+        <Sparkles className="w-3.5 h-3.5 text-duskk-gold animate-pulse flex-shrink-0" />
         <span>Complimentary Express Shipping Across India On Orders Above ₹999</span>
-        <span className="hidden sm:inline">&bull;</span>
-        <span className="hidden sm:inline">Use Code: <strong className="text-white">DUSKK10</strong> For 10% Off</span>
+        {promoCoupon && (
+          <>
+            <span className="hidden sm:inline">&bull;</span>
+            <span className="hidden sm:inline">
+              Use Code: <strong className="text-white">{promoCoupon.code}</strong> For{" "}
+              {promoCoupon.discountType === "PERCENT"
+                ? `${promoCoupon.discountValue}% Off`
+                : `₹${promoCoupon.discountValue} Off`}
+              {promoCoupon.minOrderValue > 0
+                ? ` Above ₹${promoCoupon.minOrderValue.toLocaleString("en-IN")}`
+                : ""}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Main Sticky Navbar */}
       <header
         className={`sticky top-0 z-40 transition-all duration-300 ${isScrolled
-          ? "bg-[#FAF8F5]/95 backdrop-blur-md shadow-sm border-b border-[#EAE3DA] py-2.5"
-          : "bg-[#FAF8F5] border-b border-[#EAE3DA]/70 py-3.5"
+          ? "bg-[#FAF8F5]/95 backdrop-blur-md shadow-sm border-b border-[#EAE3DA] py-2 md:py-2.5"
+          : "bg-[#FAF8F5] border-b border-[#EAE3DA]/70 py-3 md:py-3.5"
           }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          {/* Mobile menu button & search */}
-          <div className="flex items-center lg:hidden">
+          {/* LEFT: Hamburger Menu Button */}
+          <div className="flex-1 flex items-center justify-start">
             <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 text-duskk-900 hover:text-duskk-gold"
-              aria-label="Toggle menu"
+              onClick={() => setIsDrawerOpen(true)}
+              className="group flex items-center space-x-2 p-1.5 -ml-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors focus:outline-none"
+              aria-label="Open navigation menu"
             >
-              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-            <button
-              onClick={() => setIsSearchOpen(true)}
-              className="p-2 text-duskk-900 hover:text-duskk-gold ml-1"
-              aria-label="Search"
-            >
-              <Search className="w-5 h-5" />
+              <Menu className="w-6 h-6 stroke-[1.8] group-hover:scale-105 transition-transform" />
+              <span className="hidden sm:inline-block text-[11px] uppercase tracking-[0.22em] font-medium text-[#7A6B58] group-hover:text-duskk-gold">
+                MENU
+              </span>
             </button>
           </div>
 
-          {/* Desktop Left Nav Links */}
-          <nav className="hidden lg:flex items-center space-x-7 xl:space-x-9">
-            {leftNavLinks.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                className={`text-[11px] xl:text-xs uppercase tracking-[0.2em] font-medium transition-colors hover:text-duskk-gold ${pathname === link.href ? "text-duskk-gold font-semibold" : "text-[#7A6B58] hover:text-[#1F1F1F]"
-                  }`}
-              >
-                {link.name}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Center Brand Logo */}
-          <div className="flex-1 text-center lg:flex-none px-3">
+          {/* CENTER: Prominent Centered DUSKK Brand Logo */}
+          <div className="flex-shrink-0 flex items-center justify-center text-center px-2">
             <Link href="/" className="inline-flex flex-col items-center group">
               <div className="flex items-center justify-center">
-                {/* Original Gold Monogram D Logo */}
-                <div className="relative w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-105">
+                {/* Original Gold Monogram D Logo — Enhanced Size */}
+                <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-105">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={D_LOGO_SRC}
                     alt="D"
-                    className="w-full h-full object-contain filter drop-shadow-[0_1px_2px_rgba(197,168,128,0.3)]"
+                    className="w-full h-full object-contain filter drop-shadow-[0_1px_3px_rgba(197,168,128,0.35)]"
                   />
                 </div>
 
-                {/* Wordmark USKK in matching Luxury Serif */}
-                <span className="font-serif text-2xl sm:text-3xl md:text-[32px] tracking-[0.25em] uppercase font-bold text-[#1F1F1F] group-hover:text-duskk-gold transition-colors leading-none pl-1 select-none">
+                {/* Wordmark USKK in matching Luxury Serif — Enhanced Size */}
+                <span className="font-serif text-3xl sm:text-4xl md:text-[42px] tracking-[0.25em] uppercase font-bold text-[#1F1F1F] group-hover:text-duskk-gold transition-colors leading-none pl-1 sm:pl-1.5 select-none">
                   USKK
                 </span>
               </div>
-              <span className="block text-[8px] sm:text-[8.5px] tracking-[0.42em] uppercase font-light text-[#8C8276] font-sans text-center mt-1">
-                ELEGANCE CRAFTED FOR YOU
-              </span>
             </Link>
           </div>
 
-          {/* Desktop Right Nav Links & Actions */}
-          <div className="flex items-center space-x-6 xl:space-x-8">
-            <nav className="hidden lg:flex items-center space-x-7 xl:space-x-9">
-              {rightNavLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className={`text-[11px] xl:text-xs uppercase tracking-[0.2em] font-medium transition-colors hover:text-duskk-gold ${pathname === link.href ? "text-duskk-gold font-semibold" : "text-[#7A6B58] hover:text-[#1F1F1F]"
-                    }`}
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </nav>
-
+          {/* RIGHT: Essential Action Icons (Search, Track, Cart) */}
+          <div className="flex-1 flex items-center justify-end space-x-3 sm:space-x-5 md:space-x-6">
             {/* Search Trigger */}
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="hidden lg:flex items-center text-[11px] xl:text-xs tracking-[0.18em] uppercase text-[#1F1F1F] hover:text-duskk-gold transition space-x-1.5 font-medium"
+              className="p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors flex items-center space-x-1.5"
               title="Search collection"
+              aria-label="Search"
             >
-              <Search className="w-3.5 h-3.5 stroke-[2.2]" />
-              <span>SEARCH</span>
+              <Search className="w-5 h-5 stroke-[1.8]" />
+              <span className="hidden lg:inline-block text-[11px] uppercase tracking-[0.18em] font-medium text-[#7A6B58] hover:text-[#1F1F1F]">
+                SEARCH
+              </span>
             </button>
 
             {/* Track Order Link */}
             <Link
               href="/order/track"
-              className="hidden md:flex items-center text-[11px] xl:text-xs tracking-[0.18em] uppercase text-[#1F1F1F] hover:text-duskk-gold transition space-x-1.5 font-medium"
+              className="p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors hidden sm:flex items-center space-x-1.5"
               title="Track your order"
+              aria-label="Track order"
             >
-              <Compass className="w-3.5 h-3.5 stroke-[2.2]" />
-              <span>TRACK</span>
+              <Compass className="w-5 h-5 stroke-[1.8]" />
+              <span className="hidden lg:inline-block text-[11px] uppercase tracking-[0.18em] font-medium text-[#7A6B58] hover:text-[#1F1F1F]">
+                TRACK
+              </span>
             </Link>
 
-            {/* Cart Button */}
+            {/* Shopping Bag Button */}
             <button
               onClick={openCart}
-              className="relative p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition flex items-center"
+              className="relative p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors flex items-center"
               aria-label="View shopping bag"
             >
-              <ShoppingBag className="w-4 h-4 md:w-5 md:h-5 stroke-[1.8]" />
+              <ShoppingBag className="w-5 h-5 stroke-[1.8]" />
               {itemCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-duskk-900 text-white font-sans text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
                   {itemCount}
@@ -197,6 +215,7 @@ export function Navbar() {
                   type="button"
                   onClick={() => setIsSearchOpen(false)}
                   className="absolute right-3 p-1 text-duskk-400 hover:text-duskk-900"
+                  aria-label="Close search"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -240,31 +259,96 @@ export function Navbar() {
             </div>
           </div>
         )}
-
-        {/* Mobile Dropdown Menu */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden bg-white border-b border-duskk-200 px-6 py-6 space-y-4 shadow-xl">
-            <nav className="flex flex-col space-y-3">
-              {allNavLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className="text-xs font-medium tracking-widest uppercase text-duskk-900 hover:text-duskk-gold py-1 border-b border-duskk-50"
-                >
-                  {link.name}
-                </Link>
-              ))}
-              <Link
-                href="/order/track"
-                className="text-xs font-medium tracking-widest uppercase text-duskk-900 hover:text-duskk-gold py-1 border-b border-duskk-50 flex items-center space-x-2"
-              >
-                <Compass className="w-4 h-4 text-duskk-gold" />
-                <span>TRACK ORDER</span>
-              </Link>
-            </nav>
-          </div>
-        )}
       </header>
+
+      {/* Navigation Side Drawer (Inspired by Salty.co.in) */}
+      {isDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop overlay */}
+          <div
+            className="fixed inset-0 bg-black/45 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setIsDrawerOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Drawer content panel */}
+          <div className="relative w-full max-w-sm sm:max-w-md bg-[#FAF8F5] h-full shadow-2xl flex flex-col justify-between z-10 animate-slide-right overflow-y-auto border-r border-[#EAE3DA]">
+            {/* Drawer Header */}
+            <div>
+              <div className="flex items-center justify-between px-6 py-5 border-b border-[#EAE3DA]">
+                <div className="flex items-center space-x-2">
+                  <div className="relative w-7 h-7 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={D_LOGO_SRC}
+                      alt="D"
+                      className="w-full h-full object-contain filter drop-shadow-[0_1px_2px_rgba(197,168,128,0.3)]"
+                    />
+                  </div>
+                  <span className="font-serif text-xl tracking-[0.25em] uppercase font-bold text-[#1F1F1F]">
+                    USKK
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsDrawerOpen(false)}
+                  className="p-2 text-[#7A6B58] hover:text-[#1F1F1F] rounded-full hover:bg-black/5 transition-colors focus:outline-none"
+                  aria-label="Close menu"
+                >
+                  <X className="w-5 h-5 stroke-[2]" />
+                </button>
+              </div>
+
+              {/* Navigation Links */}
+              <nav className="px-6 py-6 space-y-1">
+                {allNavLinks.map((link) => {
+                  const isActive = pathname === link.href;
+                  return (
+                    <Link
+                      key={link.name}
+                      href={link.href}
+                      onClick={() => setIsDrawerOpen(false)}
+                      className={`block py-3 px-3 text-xs sm:text-sm font-medium tracking-[0.25em] uppercase rounded transition-all duration-200 ${
+                        isActive
+                          ? "bg-duskk-900 text-duskk-champagne font-semibold pl-4"
+                          : "text-[#1F1F1F] hover:bg-black/5 hover:text-duskk-gold hover:pl-4"
+                      }`}
+                    >
+                      {link.name}
+                    </Link>
+                  );
+                })}
+
+                <div className="pt-4 border-t border-[#EAE3DA]/80 mt-4">
+                  <Link
+                    href="/order/track"
+                    onClick={() => setIsDrawerOpen(false)}
+                    className="flex items-center space-x-3 py-3 px-3 text-xs sm:text-sm font-medium tracking-[0.25em] uppercase text-[#1F1F1F] hover:text-duskk-gold hover:bg-black/5 rounded transition-all duration-200"
+                  >
+                    <Compass className="w-4 h-4 text-duskk-gold" />
+                    <span>TRACK ORDER</span>
+                  </Link>
+                </div>
+              </nav>
+            </div>
+
+            {/* Drawer Footer Information */}
+            <div className="p-6 border-t border-[#EAE3DA] bg-[#F4EFEA]/60">
+              <div className="text-[10px] tracking-[0.25em] uppercase text-[#8C8276] space-y-1.5 font-sans">
+                <p className="font-medium text-[#1F1F1F]">DUSKK FINE JEWELRY</p>
+                <p>Complimentary Insured Express Shipping Across India</p>
+                {promoCoupon && (
+                  <p className="text-duskk-gold font-semibold pt-1">
+                    Use Code: {promoCoupon.code} for{" "}
+                    {promoCoupon.discountType === "PERCENT"
+                      ? `${promoCoupon.discountValue}% Off`
+                      : `₹${promoCoupon.discountValue} Off`}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -12,57 +12,59 @@ export async function validateAndCalculateCart(
     throw new Error("Your cart is empty.");
   }
 
-  const productIds = Array.from(new Set(items.map((i) => i.productId)));
-  const variantIds = Array.from(
-    new Set(items.map((i) => i.variantId).filter(Boolean) as string[])
+  const productIds = Array.from(
+    new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id)))
   );
 
   let products: any[] = [];
-  try {
-    const { data: dbProducts, error: prodError } = await supabaseAdmin
-      .from("products")
-      .select(`
-        id,
-        title,
-        slug,
-        sku,
-        base_price,
-        sale_price,
-        status,
-        product_images (
-          image_url,
-          is_primary,
-          display_order
-        ),
-        product_variants (
+  if (productIds.length > 0) {
+    try {
+      const { data: dbProducts, error: prodError } = await supabaseAdmin
+        .from("products")
+        .select(`
           id,
-          sku,
           title,
-          price_override,
-          sale_price_override,
-          stock_quantity,
-          reserved_quantity,
-          is_active,
-          image_url
-        )
-      `)
-      .in("id", productIds);
+          slug,
+          sku,
+          base_price,
+          sale_price,
+          status,
+          product_images (
+            image_url,
+            is_primary,
+            display_order
+          ),
+          product_variants (
+            id,
+            sku,
+            title,
+            price_override,
+            sale_price_override,
+            stock_quantity,
+            reserved_quantity,
+            is_active,
+            image_url
+          )
+        `)
+        .in("id", productIds);
 
-    if (!prodError && dbProducts && dbProducts.length > 0) {
-      products = dbProducts;
+      if (!prodError && dbProducts && dbProducts.length > 0) {
+        products = dbProducts;
+      }
+    } catch (err) {
+      console.warn("Pricing cart validation DB lookup fallback:", err);
     }
-  } catch (err) {
-    console.warn("Pricing cart validation DB lookup fallback:", err);
   }
 
   const productMap = new Map(products.map((p) => [p.id, p]));
+
   let subtotal = 0;
-  const validatedItems = [];
+  const validatedItems: PriceBreakdown["validatedItems"] = [];
 
   for (const item of items) {
-    const prod = productMap.get(item.productId);
-    const prodTitle = prod?.title || (item as any).name || (item as any).title || "DUSKK Jewellery Item";
     const itemQuantity = Math.max(1, item.quantity || 1);
+    const prod = productMap.get(item.productId || "");
+    const prodTitle = prod?.title || (item as any).name || (item as any).title || "DUSKK Jewellery Item";
 
     let itemPrice = prod
       ? (prod.sale_price !== null ? Number(prod.sale_price) : Number(prod.base_price))
@@ -92,15 +94,19 @@ export async function validateAndCalculateCart(
           itemPrice = Number(variant.price_override);
         }
 
-        availableStock = Math.max(1, variant.stock_quantity - (variant.reserved_quantity || 0));
+        availableStock = Math.max(0, variant.stock_quantity - (variant.reserved_quantity || 0));
       }
+    }
+
+    if (availableStock < itemQuantity) {
+      throw new Error(`"${prodTitle}" is out of stock or requested quantity exceeds available stock (${availableStock} remaining).`);
     }
 
     const itemSubtotal = itemPrice * itemQuantity;
     subtotal += itemSubtotal;
 
     validatedItems.push({
-      productId: item.productId,
+      productId: item.productId || "",
       variantId: item.variantId || null,
       name: prodTitle,
       variantTitle,
@@ -136,23 +142,33 @@ export async function validateAndCalculateCart(
       const withinLimit =
         !coupon.usage_limit_total || coupon.times_used < coupon.usage_limit_total;
 
-      if (isValidDate && meetsMinOrder && withinLimit) {
-        if (coupon.discount_type === "percentage") {
-          let calculated = (subtotal * Number(coupon.discount_value)) / 100;
-          if (coupon.max_discount_amount && calculated > Number(coupon.max_discount_amount)) {
-            calculated = Number(coupon.max_discount_amount);
-          }
-          discount = Math.round(calculated);
-        } else if (coupon.discount_type === "fixed_amount") {
-          discount = Math.min(Number(coupon.discount_value), subtotal);
-        }
-
-        couponApplied = {
-          code: coupon.code,
-          discountValue: discount,
-          discountType: coupon.discount_type,
-        };
+      if (!isValidDate) {
+        throw new Error("This coupon has expired or is not yet active.");
       }
+      if (!meetsMinOrder) {
+        throw new Error(`Coupon ${coupon.code} requires a minimum order of ₹${Number(coupon.min_order_value).toLocaleString("en-IN")}.`);
+      }
+      if (!withinLimit) {
+        throw new Error("This coupon code has reached its usage limit.");
+      }
+
+      if (coupon.discount_type === "percentage") {
+        let calculated = (subtotal * Number(coupon.discount_value)) / 100;
+        if (coupon.max_discount_amount && calculated > Number(coupon.max_discount_amount)) {
+          calculated = Number(coupon.max_discount_amount);
+        }
+        discount = Math.round(calculated);
+      } else if (coupon.discount_type === "fixed_amount") {
+        discount = Math.min(Number(coupon.discount_value), subtotal);
+      }
+
+      couponApplied = {
+        code: coupon.code,
+        discountValue: discount,
+        discountType: coupon.discount_type,
+      };
+    } else {
+      throw new Error(`Coupon "${normalizedCode}" is invalid or inactive.`);
     }
   }
 
@@ -170,3 +186,71 @@ export async function validateAndCalculateCart(
     validatedItems,
   };
 }
+
+export interface PublicPromotionalCoupon {
+  code: string;
+  description?: string | null;
+  discountType: "PERCENT" | "FIXED";
+  discountValue: number;
+  minOrderValue: number;
+  maxDiscount: number | null;
+  offerText: string;
+}
+
+export async function getPromotionalCoupon(): Promise<PublicPromotionalCoupon | null> {
+  try {
+    const { data: coupons, error } = await supabaseAdmin
+      .from("coupons")
+      .select("id, code, description, discount_type, discount_value, min_order_value, max_discount_amount, usage_limit_total, times_used, starts_at, ends_at, is_active, created_at")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+
+    if (error || !coupons || coupons.length === 0) {
+      return null;
+    }
+
+    const now = new Date();
+    const validCoupons = coupons.filter((c) => {
+      const startsAt = c.starts_at ? new Date(c.starts_at) : null;
+      const endsAt = c.ends_at ? new Date(c.ends_at) : null;
+      const isValidDate = (!startsAt || now >= startsAt) && (!endsAt || now <= endsAt);
+      const withinLimit =
+        !c.usage_limit_total || (c.times_used || 0) < c.usage_limit_total;
+      const hasDiscount = Number(c.discount_value) > 0;
+      return isValidDate && withinLimit && hasDiscount;
+    });
+
+    if (validCoupons.length === 0) {
+      return null;
+    }
+
+    // Pick top promotional coupon following CMS creation order
+    const coupon = validCoupons[0];
+    const isPercent = coupon.discount_type === "percentage";
+    const discountVal = Number(coupon.discount_value);
+    const minOrder = Number(coupon.min_order_value || 0);
+    const maxDiscount = coupon.max_discount_amount ? Number(coupon.max_discount_amount) : null;
+
+    let offerDiscountDesc = isPercent ? `${discountVal}% Off` : `₹${discountVal} Off`;
+    if (minOrder > 0) {
+      offerDiscountDesc += ` On Orders Above ₹${minOrder.toLocaleString("en-IN")}`;
+    }
+    if (isPercent && maxDiscount) {
+      offerDiscountDesc += ` (Up To ₹${maxDiscount.toLocaleString("en-IN")})`;
+    }
+
+    return {
+      code: coupon.code,
+      description: coupon.description || null,
+      discountType: isPercent ? "PERCENT" : "FIXED",
+      discountValue: discountVal,
+      minOrderValue: minOrder,
+      maxDiscount,
+      offerText: `Use Code: ${coupon.code} For ${offerDiscountDesc}`,
+    };
+  } catch (err: any) {
+    console.error("getPromotionalCoupon error:", err?.message || err);
+    return null;
+  }
+}
+

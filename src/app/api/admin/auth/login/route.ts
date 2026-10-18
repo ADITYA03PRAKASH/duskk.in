@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { signAdminToken, ADMIN_TOKEN_COOKIE } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+
+function safeCompare(a: string, b: string): boolean {
+  const hashA = crypto.createHash("sha256").update(a).digest();
+  const hashB = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,8 +33,13 @@ export async function POST(req: NextRequest) {
     let adminName = "DUSKK Administrator";
     let adminRole = "SUPER_ADMIN";
 
-    // 1. Authenticate via configured server environment variables
-    if (envAdminEmail && envAdminPassword && normalizedEmail === envAdminEmail && password === envAdminPassword) {
+    // 1. Authenticate via configured server environment variables (constant-time comparison)
+    if (
+      envAdminEmail &&
+      envAdminPassword &&
+      safeCompare(normalizedEmail, envAdminEmail) &&
+      safeCompare(password, envAdminPassword)
+    ) {
       isValid = true;
     } else {
       // 2. Authenticate via database-backed admin accounts

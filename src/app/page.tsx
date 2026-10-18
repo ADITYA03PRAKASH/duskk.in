@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
 import { getProducts, getCategories, getBanners } from "@/services/catalog.service";
 import { getPublicTestimonials, getTestimonialSectionSettings } from "@/services/testimonials.service";
+import { getPromotionalCoupon } from "@/services/pricing.service";
 import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award, ExternalLink } from "lucide-react";
 
 import { Hero } from "@/components/home/Hero";
@@ -12,13 +13,14 @@ import { Hero } from "@/components/home/Hero";
 export const revalidate = 60; // ISR cache 60 seconds
 
 export default async function HomePage() {
-  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection, banners] = await Promise.all([
+  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection, banners, promoCoupon] = await Promise.all([
     getCategories(),
     getProducts({ limit: 4, featured: true }),
     getProducts({ limit: 4, bestSeller: true }),
     getPublicTestimonials(),
     getTestimonialSectionSettings(),
     getBanners(),
+    getPromotionalCoupon(),
   ]);
 
   const featuredProducts = featuredResult.products;
@@ -29,7 +31,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <Navbar />
+      <Navbar initialPromoCoupon={promoCoupon} />
 
       <main className="flex-1">
         {/* 1. HERO VIDEO SECTION — CMS-driven via getBanners() */}
@@ -53,12 +55,20 @@ export default async function HomePage() {
               <div className="w-12 h-0.5 bg-duskk-gold mx-auto mt-4" />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
+            <div
+              className={`grid grid-cols-2 sm:grid-cols-3 ${
+                categories.length <= 4
+                  ? "lg:grid-cols-4 max-w-5xl mx-auto"
+                  : categories.length === 5
+                  ? "lg:grid-cols-5 max-w-6xl mx-auto"
+                  : "lg:grid-cols-6"
+              } gap-4 sm:gap-6 justify-center`}
+            >
               {categories.map((cat: any) => (
                 <Link
                   key={cat.id}
                   href={`/category/${cat.slug}`}
-                  className="group flex flex-col items-center text-center bg-white p-3 border border-duskk-200/80 shadow-sm hover:shadow-md transition-all duration-300"
+                  className="group flex flex-col items-center text-center bg-white p-3 border border-duskk-200/80 shadow-sm hover:shadow-md transition-all duration-300 w-full"
                 >
                   <div className="relative aspect-square w-full overflow-hidden bg-duskk-100 mb-3">
                     <img
@@ -110,27 +120,44 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* 4. PROMOTIONAL BANNER */}
-        <section className="py-16 bg-duskk-900 text-white relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-            <span className="text-xs uppercase font-mono tracking-[0.3em] text-duskk-gold block mb-2">
-              LIMITED TIME OFFER
-            </span>
-            <h2 className="font-serif text-3xl sm:text-4xl font-light mb-4">
-              Unlock 10% Off Your First Order
-            </h2>
-            <p className="text-xs sm:text-sm text-duskk-300 max-w-lg mx-auto mb-6">
-              Apply code <strong className="text-duskk-gold font-mono font-bold bg-white/10 px-2 py-0.5 rounded">DUSKK10</strong> at guest checkout. Complimentary insured express shipping on all orders.
-            </p>
-            <Link
-              href="/shop"
-              className="inline-flex items-center px-8 py-3.5 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 text-xs font-semibold uppercase tracking-widest transition shadow-lg"
-            >
-              <span>Shop With Code</span>
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Link>
-          </div>
-        </section>
+        {/* 4. PROMOTIONAL BANNER — Driven by existing CMS coupon */}
+        {promoCoupon && (
+          <section className="py-16 bg-duskk-900 text-white relative overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+              <span className="text-xs uppercase font-mono tracking-[0.3em] text-duskk-gold block mb-2">
+                LIMITED TIME OFFER
+              </span>
+              <h2 className="font-serif text-3xl sm:text-4xl font-light mb-4">
+                {promoCoupon.description || (
+                  promoCoupon.discountType === "PERCENT"
+                    ? `Unlock ${promoCoupon.discountValue}% Off Your Order`
+                    : `Enjoy Flat ₹${promoCoupon.discountValue} Off Your Order`
+                )}
+              </h2>
+              <p className="text-xs sm:text-sm text-duskk-300 max-w-lg mx-auto mb-6">
+                Apply code{" "}
+                <strong className="text-duskk-gold font-mono font-bold bg-white/10 px-2 py-0.5 rounded">
+                  {promoCoupon.code}
+                </strong>{" "}
+                at guest checkout.{" "}
+                {promoCoupon.minOrderValue > 0
+                  ? `Valid on orders above ₹${promoCoupon.minOrderValue.toLocaleString("en-IN")}. `
+                  : ""}
+                {promoCoupon.discountType === "PERCENT" && promoCoupon.maxDiscount
+                  ? `Maximum discount up to ₹${promoCoupon.maxDiscount.toLocaleString("en-IN")}. `
+                  : ""}
+                Complimentary insured express shipping on all orders.
+              </p>
+              <Link
+                href="/shop"
+                className="inline-flex items-center px-8 py-3.5 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 text-xs font-semibold uppercase tracking-widest transition shadow-lg"
+              >
+                <span>Shop With Code</span>
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </div>
+          </section>
+        )}
 
         {/* 5. BEST SELLERS */}
         <section className="py-20 bg-duskk-cream">
@@ -162,25 +189,29 @@ export default async function HomePage() {
         </section>
 
         {/* 6. BRAND STORY SECTION */}
-        <section className="py-20 bg-white border-y border-duskk-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              <div className="relative aspect-4/3 overflow-hidden shadow-xl">
-                <img
-                  src="https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80"
-                  alt="DUSKK Craftsmanship"
-                  className="w-full h-full object-cover"
-                />
+        <section className="py-12 sm:py-14 bg-white border-y border-duskk-200">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12 lg:gap-14">
+              {/* Compact Portrait Image (approx. 280-300px width, 350-360px height on desktop) */}
+              <div className="w-full max-w-[280px] sm:max-w-[290px] md:w-[290px] lg:w-[300px] flex-shrink-0">
+                <div className="relative w-full h-[350px] sm:h-[360px] overflow-hidden shadow-xl border border-duskk-200/80">
+                  <img
+                    src="https://i.pinimg.com/1200x/5a/bd/84/5abd84ac52a6b23b4d28f69d9252214f.jpg"
+                    alt="DUSKK Craftsmanship — Crafted For The Modern Muse"
+                    className="w-full h-full object-cover object-center transition-transform duration-700 hover:scale-105"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-6">
-                <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block">
+              {/* Story Content Block */}
+              <div className="flex-1 max-w-xl space-y-3.5 text-left">
+                <span className="text-[11px] uppercase font-mono tracking-[0.25em] text-duskk-gold block font-semibold">
                   THE DUSKK STORY
                 </span>
-                <h2 className="font-serif text-3xl sm:text-4xl text-duskk-900 font-light leading-snug">
+                <h2 className="font-serif text-2xl sm:text-3xl text-duskk-900 font-light leading-snug">
                   Crafted For The Modern Muse
                 </h2>
-                <div className="space-y-4 text-xs sm:text-sm text-duskk-600 leading-relaxed">
+                <div className="space-y-2.5 text-xs sm:text-[13px] text-duskk-600 leading-relaxed">
                   <p>
                     DUSKK was founded in New Delhi with a clear conviction: creating refined demi-fine jewellery for everyday wear without unnecessary luxury markups. We handcraft pieces using hypoallergenic 925 sterling silver and medical-grade stainless steel finished in radiant gold plating.
                   </p>
@@ -189,10 +220,10 @@ export default async function HomePage() {
                   </p>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-1">
                   <Link
                     href="/about"
-                    className="inline-flex items-center text-xs uppercase font-mono tracking-widest text-duskk-900 border-b border-duskk-900 pb-1 hover:text-duskk-gold hover:border-duskk-gold transition-colors"
+                    className="inline-flex items-center text-xs uppercase font-mono tracking-widest text-duskk-900 border-b border-duskk-900 pb-0.5 hover:text-duskk-gold hover:border-duskk-gold transition-colors font-semibold"
                   >
                     Read Our Story &rarr;
                   </Link>
