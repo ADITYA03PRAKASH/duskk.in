@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CartItemInput, PriceBreakdown } from "@/types";
+import { getCustomComboSettings } from "./combo.service";
 
 const FREE_SHIPPING_THRESHOLD = 999;
 const STANDARD_SHIPPING_CHARGE = 99;
@@ -12,12 +13,20 @@ export async function validateAndCalculateCart(
     throw new Error("Your cart is empty.");
   }
 
+  const customSettings = await getCustomComboSettings();
+
+  const customComboProductIds = items
+    .filter((i) => (i.isCustomCombo || (i.customComponents && i.customComponents.length > 0)) && Array.isArray(i.customComponents))
+    .flatMap((i) => (i.customComponents || []).map((c) => c.productId))
+    .filter(Boolean);
+
   const productIds = Array.from(
-    new Set(
-      items
-        .filter((i) => !i.comboId && Boolean(i.productId))
-        .map((i) => i.productId as string)
-    )
+    new Set([
+      ...items
+        .filter((i) => !i.comboId && !i.isCustomCombo && (!i.customComponents || i.customComponents.length === 0) && Boolean(i.productId))
+        .map((i) => i.productId as string),
+      ...customComboProductIds,
+    ])
   );
 
   const comboIds = Array.from(
@@ -40,6 +49,7 @@ export async function validateAndCalculateCart(
           sku,
           base_price,
           sale_price,
+          category_id,
           status,
           product_images (
             image_url,
@@ -245,7 +255,183 @@ export async function validateAndCalculateCart(
       continue;
     }
 
-    // 2. Handle Standard Product Items
+    // 2. Handle Custom Combo Items (Build Your Own Combo)
+    if (item.isCustomCombo || (item.customComponents && item.customComponents.length > 0)) {
+      if (!customSettings.isEnabled) {
+        throw new Error("Build Your Own Combo is currently unavailable.");
+      }
+
+      const now = new Date();
+      if (customSettings.startsAt && now < new Date(customSettings.startsAt)) {
+        throw new Error("The Build Your Own Combo promotion is not yet active.");
+      }
+      if (customSettings.endsAt && now > new Date(customSettings.endsAt)) {
+        throw new Error("The Build Your Own Combo promotion has ended.");
+      }
+
+      const componentsInput = item.customComponents || [];
+      if (componentsInput.length < customSettings.minItems) {
+        throw new Error(`Custom combo requires at least ${customSettings.minItems} distinct items.`);
+      }
+      if (componentsInput.length > customSettings.maxItems) {
+        throw new Error(`Custom combo allows at most ${customSettings.maxItems} distinct items.`);
+      }
+
+      let combinedRawPrice = 0;
+      let combinedMrp = 0;
+      let maxCombosPossible = 999;
+      const validatedComponents: {
+        productId: string;
+        variantId?: string | null;
+        quantity: number;
+        name: string;
+        variantTitle?: string | null;
+        sku: string;
+        price: number;
+        mrp: number;
+        image: string | null;
+      }[] = [];
+
+      const seenProductIds = new Set<string>();
+
+      for (const comp of componentsInput) {
+        if (!comp.productId) {
+          throw new Error("Invalid product in custom combo.");
+        }
+        if (seenProductIds.has(comp.productId)) {
+          throw new Error("Custom combo cannot contain duplicate selections of the same product.");
+        }
+        seenProductIds.add(comp.productId);
+
+        const compQty = Math.max(1, comp.quantity || 1);
+        if (compQty < customSettings.minQuantityPerProduct) {
+          throw new Error(`Minimum quantity per product is ${customSettings.minQuantityPerProduct}.`);
+        }
+        if (compQty > customSettings.maxQuantityPerProduct) {
+          throw new Error(`Maximum quantity per product is ${customSettings.maxQuantityPerProduct}.`);
+        }
+
+        const prod = productMap.get(comp.productId);
+        if (!prod || prod.status !== "active") {
+          throw new Error(`Product "${prod?.title || comp.productId}" in custom combo is currently unavailable.`);
+        }
+
+        if (customSettings.eligibleProductIds && customSettings.eligibleProductIds.length > 0) {
+          if (!customSettings.eligibleProductIds.includes(prod.id)) {
+            throw new Error(`Product "${prod.title}" is not eligible for Build Your Own Combo.`);
+          }
+        } else if (customSettings.eligibleCategoryIds && customSettings.eligibleCategoryIds.length > 0) {
+          if (!customSettings.eligibleCategoryIds.includes(prod.category_id)) {
+            throw new Error(`Product "${prod.title}" is in a category not eligible for Build Your Own Combo.`);
+          }
+        }
+
+        const activeVariants: any[] = (prod.product_variants || []).filter((v: any) => v.is_active);
+        let selectedVariant: any = null;
+
+        if (comp.variantId) {
+          selectedVariant = activeVariants.find((v: any) => v.id === comp.variantId);
+          if (!selectedVariant) {
+            throw new Error(`Selected variant for "${prod.title}" is unavailable.`);
+          }
+        } else if (activeVariants.length > 0) {
+          selectedVariant = activeVariants[0];
+        }
+
+        let compPrice = prod.sale_price !== null ? Number(prod.sale_price) : Number(prod.base_price);
+        let compMrp = Number(prod.base_price);
+        let compSku = prod.sku;
+        let compVariantTitle: string | null = null;
+        let compAvailableStock = 0;
+
+        if (selectedVariant) {
+          compVariantTitle = selectedVariant.title;
+          compSku = selectedVariant.sku || prod.sku;
+          if (selectedVariant.sale_price_override !== null && selectedVariant.sale_price_override !== undefined) {
+            compPrice = Number(selectedVariant.sale_price_override);
+          } else if (selectedVariant.price_override !== null && selectedVariant.price_override !== undefined) {
+            compPrice = Number(selectedVariant.price_override);
+          }
+          compAvailableStock = Math.max(0, (selectedVariant.stock_quantity || 0) - (selectedVariant.reserved_quantity || 0));
+        } else {
+          compAvailableStock = 50;
+        }
+
+        const totalNeeded = compQty * itemQuantity;
+        if (compAvailableStock < totalNeeded) {
+          const supported = Math.floor(compAvailableStock / compQty);
+          throw new Error(`Insufficient stock for "${prod.title}". Only ${supported} custom combo(s) can be fulfilled.`);
+        }
+
+        const compCombosSupported = Math.floor(compAvailableStock / compQty);
+        if (compCombosSupported < maxCombosPossible) {
+          maxCombosPossible = compCombosSupported;
+        }
+
+        const primaryImgObj =
+          (prod.product_images as any[])?.find((img: any) => img.is_primary) ||
+          (prod.product_images as any[])?.[0];
+        const compImg = selectedVariant?.image_url || primaryImgObj?.image_url || "/placeholder.jpg";
+
+        combinedRawPrice += compPrice * compQty;
+        combinedMrp += compMrp * compQty;
+
+        validatedComponents.push({
+          productId: prod.id,
+          variantId: selectedVariant?.id || null,
+          quantity: compQty,
+          name: prod.title,
+          variantTitle: compVariantTitle,
+          sku: compSku,
+          price: compPrice,
+          mrp: compMrp,
+          image: compImg,
+        });
+      }
+
+      let comboDiscount = 0;
+      if (customSettings.discountType === "percentage" && customSettings.discountValue > 0) {
+        let calc = (combinedRawPrice * customSettings.discountValue) / 100;
+        if (customSettings.maxDiscountAmount && calc > customSettings.maxDiscountAmount) {
+          calc = customSettings.maxDiscountAmount;
+        }
+        comboDiscount = Math.round(calc);
+      } else if (customSettings.discountType === "fixed_amount" && customSettings.discountValue > 0) {
+        comboDiscount = Math.min(customSettings.discountValue, combinedRawPrice);
+        if (customSettings.maxDiscountAmount && comboDiscount > customSettings.maxDiscountAmount) {
+          comboDiscount = customSettings.maxDiscountAmount;
+        }
+      }
+
+      const finalComboUnitPrice = Math.max(0, combinedRawPrice - comboDiscount);
+      const itemSubtotal = finalComboUnitPrice * itemQuantity;
+      subtotal += itemSubtotal;
+
+      const firstImg = validatedComponents[0]?.image || "/placeholder.jpg";
+      const totalPiecesCount = validatedComponents.reduce((s, c) => s + c.quantity, 0);
+
+      validatedItems.push({
+        productId: null,
+        comboId: null,
+        isCombo: true,
+        isCustomCombo: true,
+        variantId: null,
+        name: `Custom Combo (${totalPiecesCount} Pieces)`,
+        variantTitle: validatedComponents.map((c) => `${c.name}${c.variantTitle ? ` (${c.variantTitle})` : ""} ×${c.quantity}`).join(", "),
+        sku: `CUSTOM-COMBO-${Date.now().toString().slice(-6)}`,
+        image: firstImg,
+        price: finalComboUnitPrice,
+        mrp: combinedMrp,
+        quantity: itemQuantity,
+        subtotal: itemSubtotal,
+        availableStock: maxCombosPossible,
+        comboComponents: validatedComponents,
+      });
+
+      continue;
+    }
+
+    // 3. Handle Standard Product Items
     const prod = productMap.get(item.productId || "");
     const prodTitle = prod?.title || (item as any).name || (item as any).title || "DUSKK Jewellery Item";
 
@@ -253,6 +439,7 @@ export async function validateAndCalculateCart(
     let itemMrp: number;
     let itemSku: string;
     let variantTitle: string | null = null;
+    let selectedItemVariantId: string | null = item.variantId || null;
     let availableStock = 99;
 
     const primaryImgObj =
@@ -284,6 +471,12 @@ export async function validateAndCalculateCart(
         }
         availableStock = Math.max(0, variant.stock_quantity - (variant.reserved_quantity || 0));
       } else if (activeVariants.length > 0) {
+        // Auto-select standard/single variant for inventory reservation tracking
+        if (activeVariants.length === 1) {
+          selectedItemVariantId = activeVariants[0].id;
+          variantTitle = activeVariants[0].title !== "Standard" ? activeVariants[0].title : null;
+          itemSku = activeVariants[0].sku || prod.sku;
+        }
         availableStock = activeVariants.reduce(
           (acc: number, v: any) => acc + Math.max(0, v.stock_quantity - (v.reserved_quantity || 0)),
           0
@@ -311,7 +504,7 @@ export async function validateAndCalculateCart(
 
     validatedItems.push({
       productId: item.productId || "",
-      variantId: item.variantId || null,
+      variantId: selectedItemVariantId,
       name: prodTitle,
       variantTitle,
       sku: itemSku,
@@ -342,7 +535,23 @@ export async function validateAndCalculateCart(
       const startsAt = new Date(coupon.starts_at);
       const endsAt = coupon.ends_at ? new Date(coupon.ends_at) : null;
       const isValidDate = now >= startsAt && (!endsAt || now <= endsAt);
-      const meetsMinOrder = subtotal >= Number(coupon.min_order_value || 0);
+
+      // Stacking policy: check if coupon applies to custom combo items
+      const hasCustomCombo = validatedItems.some((i) => i.isCustomCombo);
+      let couponBaseSubtotal = subtotal;
+
+      if (hasCustomCombo && customSettings.allowCouponsWithCombo === false) {
+        const nonComboSubtotal = validatedItems
+          .filter((i) => !i.isCustomCombo)
+          .reduce((sum, i) => sum + i.subtotal, 0);
+
+        if (nonComboSubtotal <= 0) {
+          throw new Error("Coupon codes cannot be combined with Build Your Own Combo savings.");
+        }
+        couponBaseSubtotal = nonComboSubtotal;
+      }
+
+      const meetsMinOrder = couponBaseSubtotal >= Number(coupon.min_order_value || 0);
       const withinLimit =
         !coupon.usage_limit_total || coupon.times_used < coupon.usage_limit_total;
 
@@ -357,13 +566,13 @@ export async function validateAndCalculateCart(
       }
 
       if (coupon.discount_type === "percentage") {
-        let calculated = (subtotal * Number(coupon.discount_value)) / 100;
+        let calculated = (couponBaseSubtotal * Number(coupon.discount_value)) / 100;
         if (coupon.max_discount_amount && calculated > Number(coupon.max_discount_amount)) {
           calculated = Number(coupon.max_discount_amount);
         }
         discount = Math.round(calculated);
       } else if (coupon.discount_type === "fixed_amount") {
-        discount = Math.min(Number(coupon.discount_value), subtotal);
+        discount = Math.min(Number(coupon.discount_value), couponBaseSubtotal);
       }
 
       couponApplied = {

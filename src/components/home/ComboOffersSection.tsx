@@ -3,15 +3,24 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
-import { Combo } from "@/types";
+import { Combo, CustomComboSettings } from "@/types";
 import { useCart } from "@/context/CartContext";
-import { Gift, ArrowRight, Check, ShoppingBag, Sparkles, Package } from "lucide-react";
+import { Gift, ArrowRight, Check, ShoppingBag, Sparkles, Package, Layers } from "lucide-react";
 
-export function ComboOffersSection({ combos }: { combos: Combo[] }) {
+export function ComboOffersSection({
+  combos,
+  builderSettings,
+}: {
+  combos: Combo[];
+  builderSettings?: CustomComboSettings | null;
+}) {
   const { addComboToCart } = useCart();
   const [addedComboId, setAddedComboId] = useState<string | null>(null);
 
-  if (!combos || combos.length === 0) {
+  const hasCombos = combos && combos.length > 0;
+  const showBuilder = Boolean(builderSettings?.isEnabled && builderSettings?.showOnHomepage);
+
+  if (!hasCombos && !showBuilder) {
     return null;
   }
 
@@ -28,31 +37,86 @@ export function ComboOffersSection({ combos }: { combos: Combo[] }) {
       <div className="absolute bottom-0 left-10 w-96 h-96 bg-duskk-gold/5 rounded-full blur-3xl pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12">
-          <div>
-            <div className="flex items-center space-x-2 text-duskk-gold mb-2">
-              <Gift className="w-4 h-4" />
-              <span className="text-xs uppercase font-mono tracking-[0.25em]">
-                CURATED GIFT SETS
-              </span>
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-white font-medium">
-              Exclusive Combo Offers
-            </h2>
-            <p className="text-duskk-300 text-sm mt-2 max-w-lg">
-              Complementary luxury pieces bundled together at exclusive gift prices. Complete with signature luxury gift box packaging.
-            </p>
-          </div>
+        {/* Mode B: Build Your Own Combo Feature Banner */}
+        {showBuilder && builderSettings && (
+          <div className="mb-14 relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#211d17] via-duskk-950 to-[#272118] border border-duskk-gold/30 p-6 sm:p-8 md:p-10 shadow-2xl">
+            <div className="absolute -top-12 -right-12 w-64 h-64 bg-duskk-gold/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center space-x-2 bg-duskk-gold/15 text-duskk-gold border border-duskk-gold/30 px-3 py-1 rounded-full text-xs font-mono uppercase tracking-widest mb-3">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Interactive Combo Atelier</span>
+                </div>
+                <h3 className="font-serif text-2xl sm:text-3xl text-white font-medium">
+                  {builderSettings.title || "Build Your Own Custom Combo"}
+                </h3>
+                <p className="text-duskk-300 text-xs sm:text-sm mt-2 leading-relaxed">
+                  {builderSettings.subtitle ||
+                    "Handpick your favorite demi-fine earrings, necklaces, and rings to create a personalized gift set with instant bundle savings."}
+                </p>
+                <div className="flex flex-wrap items-center gap-4 mt-4 text-xs font-mono text-duskk-200">
+                  <span className="flex items-center space-x-1.5 text-duskk-champagne">
+                    <Check className="w-3.5 h-3.5 text-duskk-gold" />
+                    <span>Choose {builderSettings.minItems}-{builderSettings.maxItems} pieces</span>
+                  </span>
+                  {builderSettings.discountType !== "none" && (
+                    <span className="flex items-center space-x-1.5 text-duskk-champagne">
+                      <Check className="w-3.5 h-3.5 text-duskk-gold" />
+                      <span>
+                        {builderSettings.discountType === "percentage"
+                          ? `Flat ${builderSettings.discountValue}% Bundle Savings`
+                          : `Save ₹${builderSettings.discountValue} Instantly`}
+                      </span>
+                    </span>
+                  )}
+                  <span className="flex items-center space-x-1.5 text-duskk-champagne">
+                    <Check className="w-3.5 h-3.5 text-duskk-gold" />
+                    <span>Free Luxury Velvet Gift Box</span>
+                  </span>
+                </div>
+              </div>
 
-          <Link
-            href="/combos"
-            className="group inline-flex items-center text-xs uppercase font-mono tracking-widest text-duskk-gold hover:text-white transition mt-4 md:mt-0"
-          >
-            Explore All Combos
-            <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </div>
+              <div className="flex-shrink-0">
+                <Link
+                  href="/build-your-combo"
+                  className="inline-flex items-center justify-center px-6 py-3.5 bg-duskk-gold text-duskk-950 hover:bg-white text-xs font-bold uppercase tracking-widest rounded-lg transition-all shadow-lg hover:shadow-duskk-gold/20 hover:scale-[1.02]"
+                >
+                  <Layers className="w-4 h-4 mr-2" />
+                  <span>Design Your Combo</span>
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Section Header (Curated Combos) */}
+        {hasCombos && (
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12">
+            <div>
+              <div className="flex items-center space-x-2 text-duskk-gold mb-2">
+                <Gift className="w-4 h-4" />
+                <span className="text-xs uppercase font-mono tracking-[0.25em]">
+                  CURATED GIFT SETS
+                </span>
+              </div>
+              <h2 className="font-serif text-3xl sm:text-4xl text-white font-medium">
+                Exclusive Combo Offers
+              </h2>
+              <p className="text-duskk-300 text-sm mt-2 max-w-lg">
+                Complementary luxury pieces bundled together at exclusive gift prices. Complete with signature luxury gift box packaging.
+              </p>
+            </div>
+
+            <Link
+              href="/combos"
+              className="group inline-flex items-center text-xs uppercase font-mono tracking-widest text-duskk-gold hover:text-white transition mt-4 md:mt-0"
+            >
+              Explore All Combos
+              <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+        )}
 
         {/* Combos Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

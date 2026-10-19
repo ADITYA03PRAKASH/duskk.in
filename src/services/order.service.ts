@@ -9,6 +9,7 @@ import {
   sendOrderStatusUpdateEmail,
   sendRefundEmail,
 } from "./email.service";
+import { saveCustomComboOrderSnapshot } from "./combo.service";
 
 export async function initiateCheckoutOrder(
   payload: CheckoutPayload,
@@ -105,21 +106,57 @@ export async function initiateCheckoutOrder(
 
   orderId = order.id;
 
-  // 8. Insert Order Items
-  const orderItemsData = calculation.validatedItems.map((item) => ({
-    order_id: orderId,
-    product_id: item.productId || null,
-    combo_id: item.comboId || null,
-    variant_id: item.variantId || null,
-    product_title: item.name,
-    variant_title: item.variantTitle || null,
-    sku: item.sku,
-    image_url: item.image,
-    unit_price: item.mrp || item.price,
-    unit_sale_price: item.price,
-    quantity: item.quantity,
-    total_price: item.subtotal,
-  }));
+  // 8. Insert Order Items & Snapshots
+  const orderItemsData: any[] = [];
+
+  for (const item of calculation.validatedItems) {
+    // Parent item row
+    orderItemsData.push({
+      order_id: orderId,
+      product_id: item.productId || null,
+      combo_id: item.comboId || null,
+      variant_id: item.variantId || null,
+      product_title: item.name,
+      variant_title: item.variantTitle || null,
+      sku: item.sku,
+      image_url: item.image,
+      unit_price: item.mrp || item.price,
+      unit_sale_price: item.price,
+      quantity: item.quantity,
+      total_price: item.subtotal,
+    });
+
+    // If item is combo with components, insert component lines for inventory deduction & fulfillment tracking
+    if (item.isCombo && item.comboComponents && item.comboComponents.length > 0) {
+      for (const comp of item.comboComponents) {
+        orderItemsData.push({
+          order_id: orderId,
+          product_id: comp.productId || null,
+          combo_id: item.comboId || null,
+          variant_id: comp.variantId || null,
+          product_title: `↳ [Included in ${item.name}] ${comp.name}`,
+          variant_title: comp.variantTitle || null,
+          sku: comp.sku,
+          image_url: comp.image || null,
+          unit_price: comp.mrp || comp.price || 0,
+          unit_sale_price: 0,
+          quantity: comp.quantity * item.quantity,
+          total_price: 0,
+        });
+      }
+
+      // If it is custom combo, save immutable custom_combos record
+      if (item.isCustomCombo) {
+        await saveCustomComboOrderSnapshot(orderId, customerRecord.id, {
+          title: item.name,
+          components: item.comboComponents,
+          subtotal: item.mrp,
+          discount: Math.max(0, item.mrp - item.price),
+          finalPrice: item.price * item.quantity,
+        });
+      }
+    }
+  }
 
   const { error: itemsError } = await supabaseAdmin.from("order_items").insert(orderItemsData);
   if (itemsError) {

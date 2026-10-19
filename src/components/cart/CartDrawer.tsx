@@ -101,7 +101,9 @@ export function CartDrawer() {
               </div>
             ) : (
               items.map((item) => {
-                const itemKey = item.comboId
+                const itemKey = item.isCustomCombo
+                  ? item.productId
+                  : item.comboId
                   ? `combo_${item.comboId}`
                   : item.variantId
                   ? `${item.productId}_${item.variantId}`
@@ -120,11 +122,15 @@ export function CartDrawer() {
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
                         <div>
-                          {item.isCombo && (
+                          {item.isCustomCombo ? (
+                            <span className="inline-block px-1.5 py-0.5 mb-1 text-[10px] uppercase font-bold tracking-wider bg-duskk-gold/20 text-duskk-900 border border-duskk-gold/40 rounded">
+                              Custom Combo
+                            </span>
+                          ) : item.isCombo ? (
                             <span className="inline-block px-1.5 py-0.5 mb-1 text-[10px] uppercase font-bold tracking-wider bg-duskk-gold/15 text-duskk-gold rounded">
                               Combo Offer
                             </span>
-                          )}
+                          ) : null}
                           <h4 className="text-sm font-medium text-duskk-900 line-clamp-1">
                             {item.name}
                           </h4>
@@ -136,9 +142,28 @@ export function CartDrawer() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      {item.variantTitle && (
+
+                      {item.customComboComponents && item.customComboComponents.length > 0 ? (
+                        <div className="mt-1.5 bg-duskk-50 p-2 rounded text-[11px] border border-duskk-100">
+                          <p className="font-semibold text-duskk-800 text-[10px] uppercase tracking-wider mb-1">
+                            Included In Combo:
+                          </p>
+                          <ul className="space-y-0.5">
+                            {item.customComboComponents.map((c, idx) => (
+                              <li key={idx} className="flex items-center justify-between text-duskk-600">
+                                <span className="truncate pr-2">
+                                  &bull; {c.name} {c.variantTitle ? `(${c.variantTitle})` : ""}
+                                </span>
+                                <span className="font-mono text-duskk-900 flex-shrink-0 font-medium">
+                                  ×{c.quantity}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : item.variantTitle ? (
                         <p className="text-xs text-duskk-600 font-medium mt-0.5">{item.variantTitle}</p>
-                      )}
+                      ) : null}
                       <p className="text-xs text-duskk-500 font-mono mt-0.5">SKU: {item.sku}</p>
                       <div className="flex items-baseline space-x-2 mt-1">
                         <span className="text-sm font-semibold text-duskk-900">

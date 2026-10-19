@@ -102,6 +102,7 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
 
   const allNavLinks = [
     { name: "SHOP ALL", href: "/shop" },
+    { name: "BUILD YOUR COMBO", href: "/build-your-combo", isSpecial: true },
     { name: "GIFT SETS & COMBOS", href: "/combos" },
     ...(categories.length > 0
       ? categories.map((c) => ({ name: c.name, href: `/category/${c.slug}` }))
@@ -328,20 +329,27 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
 
               {/* Navigation Links */}
               <nav className="px-6 py-6 space-y-1">
-                {allNavLinks.map((link) => {
+                {allNavLinks.map((link: any) => {
                   const isActive = pathname === link.href;
                   return (
                     <Link
                       key={link.name}
                       href={link.href}
                       onClick={() => setIsDrawerOpen(false)}
-                      className={`block py-3 px-3 text-xs sm:text-sm font-medium tracking-[0.25em] uppercase rounded transition-all duration-200 ${
+                      className={`flex items-center justify-between py-3 px-3 text-xs sm:text-sm font-medium tracking-[0.25em] uppercase rounded transition-all duration-200 ${
                         isActive
                           ? "bg-duskk-900 text-duskk-champagne font-semibold pl-4"
+                          : link.isSpecial
+                          ? "text-duskk-900 hover:bg-black/5 hover:text-duskk-gold hover:pl-4 font-semibold bg-duskk-gold/5 border border-duskk-gold/20"
                           : "text-[#1F1F1F] hover:bg-black/5 hover:text-duskk-gold hover:pl-4"
                       }`}
                     >
-                      {link.name}
+                      <span>{link.name}</span>
+                      {link.isSpecial && (
+                        <span className="text-[9px] tracking-widest font-mono font-bold bg-duskk-gold text-duskk-950 px-2 py-0.5 rounded shadow-sm">
+                          NEW
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

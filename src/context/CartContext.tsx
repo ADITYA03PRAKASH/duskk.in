@@ -2,10 +2,24 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 
+export interface CustomComboComponentCart {
+  productId: string;
+  variantId?: string | null;
+  name: string;
+  variantTitle?: string | null;
+  sku: string;
+  price: number;
+  mrp: number;
+  image: string;
+  quantity: number;
+}
+
 export interface CartItem {
   productId: string;
   comboId?: string;
   isCombo?: boolean;
+  isCustomCombo?: boolean;
+  customComboComponents?: CustomComboComponentCart[];
   variantId?: string | null;
   variantTitle?: string | null;
   name: string;
@@ -21,6 +35,15 @@ interface CartContextType {
   items: CartItem[];
   addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
   addComboToCart: (combo: any, quantity?: number) => void;
+  addCustomComboToCart: (customCombo: {
+    id?: string;
+    title: string;
+    price: number;
+    mrp: number;
+    image?: string;
+    components: CustomComboComponentCart[];
+    availableStock?: number;
+  }, quantity?: number) => void;
   removeItem: (idOrKey: string) => void;
   updateQuantity: (idOrKey: string, quantity: number) => void;
   clearCart: () => void;
@@ -36,7 +59,8 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = "duskk_shopping_cart_v1";
 
-function getCartItemKey(item: { productId: string; comboId?: string; variantId?: string | null }): string {
+function getCartItemKey(item: { productId: string; comboId?: string; variantId?: string | null; isCustomCombo?: boolean }): string {
+  if (item.isCustomCombo) return item.productId.startsWith("custom_combo_") ? item.productId : `custom_combo_${item.productId}`;
   if (item.comboId) return `combo_${item.comboId}`;
   return `${item.productId}_${item.variantId || "default"}`;
 }
@@ -115,6 +139,46 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const addCustomComboToCart = (
+    customCombo: {
+      id?: string;
+      title: string;
+      price: number;
+      mrp: number;
+      image?: string;
+      components: CustomComboComponentCart[];
+      availableStock?: number;
+    },
+    quantity: number = 1
+  ) => {
+    const customId = customCombo.id || `custom_combo_${Date.now()}`;
+    const totalPieces = customCombo.components.reduce((sum, c) => sum + c.quantity, 0);
+    const componentSummary = customCombo.components
+      .map((c) => `${c.name}${c.variantTitle ? ` (${c.variantTitle})` : ""} ×${c.quantity}`)
+      .join(", ");
+
+    addItem(
+      {
+        productId: customId,
+        isCombo: true,
+        isCustomCombo: true,
+        customComboComponents: customCombo.components,
+        variantId: null,
+        variantTitle: componentSummary,
+        name: customCombo.title || `Custom Combo (${totalPieces} Pieces)`,
+        sku: `CUSTOM-COMBO-${Date.now().toString().slice(-6)}`,
+        price: Number(customCombo.price),
+        mrp: Number(customCombo.mrp || customCombo.price),
+        image:
+          customCombo.image ||
+          customCombo.components[0]?.image ||
+          "/placeholder.jpg",
+        stockQuantity: customCombo.availableStock || 10,
+      },
+      quantity
+    );
+  };
+
   const removeItem = (idOrKey: string) => {
     setItems((prev) =>
       prev.filter(
@@ -160,6 +224,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         items,
         addItem,
         addComboToCart,
+        addCustomComboToCart,
         removeItem,
         updateQuantity,
         clearCart,
@@ -183,3 +248,4 @@ export function useCart() {
   }
   return context;
 }
+

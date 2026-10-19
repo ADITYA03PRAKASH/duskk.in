@@ -24,6 +24,7 @@ import {
   Percent,
   RefreshCw,
 } from "lucide-react";
+import { CustomComboSettingsTab } from "./CustomComboSettingsTab";
 
 interface ProductOption {
   id: string;
@@ -42,6 +43,7 @@ interface ProductOption {
 }
 
 export default function AdminCombosPage() {
+  const [activeTab, setActiveTab] = useState<"PREDEFINED" | "CUSTOM_BUILDER">("PREDEFINED");
   const [combos, setCombos] = useState<Combo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -546,8 +548,47 @@ export default function AdminCombosPage() {
         </div>
       </div>
 
-      {/* Success Notification Alert */}
-      {successMessage && (
+      {/* Experience Mode Tab Switcher */}
+      <div className="flex border-b border-duskk-200 gap-6 sm:gap-8">
+        <button
+          type="button"
+          onClick={() => setActiveTab("PREDEFINED")}
+          className={`flex items-center space-x-2 pb-3 text-xs uppercase tracking-wider font-semibold border-b-2 transition ${
+            activeTab === "PREDEFINED"
+              ? "border-duskk-900 text-duskk-900"
+              : "border-transparent text-duskk-400 hover:text-duskk-800"
+          }`}
+        >
+          <Gift className="w-4 h-4" />
+          <span>Curated Combos (Admin-Created)</span>
+          <span className="ml-1.5 px-2 py-0.5 text-[10px] bg-duskk-100 text-duskk-700 rounded-full font-mono">
+            {combos.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("CUSTOM_BUILDER")}
+          className={`flex items-center space-x-2 pb-3 text-xs uppercase tracking-wider font-semibold border-b-2 transition ${
+            activeTab === "CUSTOM_BUILDER"
+              ? "border-duskk-900 text-duskk-900"
+              : "border-transparent text-duskk-400 hover:text-duskk-800"
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-duskk-gold" />
+          <span>Build Your Own Combo (Customer Builder Config)</span>
+          <span className="ml-1.5 px-2 py-0.5 text-[10px] bg-duskk-gold/20 text-duskk-900 font-bold rounded-full font-mono">
+            Mode B
+          </span>
+        </button>
+      </div>
+
+      {activeTab === "CUSTOM_BUILDER" ? (
+        <CustomComboSettingsTab />
+      ) : (
+        <>
+          {/* Success Notification Alert */}
+          {successMessage && (
         <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center space-x-3 text-sm animate-fade-in shadow-sm">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
           <span>{successMessage}</span>
@@ -854,6 +895,8 @@ export default function AdminCombosPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* CREATE / EDIT MODAL */}
       {isModalOpen && (

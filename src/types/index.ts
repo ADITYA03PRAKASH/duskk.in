@@ -1,6 +1,14 @@
+export interface CustomComboComponentInput {
+  productId: string;
+  variantId?: string | null;
+  quantity: number;
+}
+
 export interface CartItemInput {
   productId?: string;
   comboId?: string;
+  isCustomCombo?: boolean;
+  customComponents?: CustomComboComponentInput[];
   variantId?: string | null;
   quantity: number;
 }
@@ -26,6 +34,49 @@ export interface CheckoutPayload {
   items: CartItemInput[];
   couponCode?: string;
   notes?: string;
+}
+
+export interface CustomComboSettings {
+  isEnabled: boolean;
+  title: string;
+  subtitle: string;
+  eligibleCategoryIds: string[];
+  eligibleProductIds: string[];
+  minItems: number;
+  maxItems: number;
+  minQuantityPerProduct: number;
+  maxQuantityPerProduct: number;
+  discountType: "none" | "percentage" | "fixed_amount";
+  discountValue: number;
+  maxDiscountAmount: number | null;
+  allowCouponsWithCombo?: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  showOnHomepage: boolean;
+  homepageDisplayOrder: number;
+}
+
+export interface CustomComboRecord {
+  id: string;
+  orderId: string;
+  customerId?: string | null;
+  comboTitle: string;
+  components: {
+    productId: string;
+    variantId?: string | null;
+    name: string;
+    variantTitle?: string | null;
+    sku: string;
+    price: number;
+    mrp: number;
+    quantity: number;
+    subtotal: number;
+    image?: string | null;
+  }[];
+  subtotalAmount: number;
+  discountAmount: number;
+  finalPrice: number;
+  createdAt: string;
 }
 
 export interface ComboItemDetail {
@@ -113,6 +164,7 @@ export interface PriceBreakdown {
     productId?: string | null;
     comboId?: string | null;
     isCombo?: boolean;
+    isCustomCombo?: boolean;
     variantId?: string | null;
     name: string;
     variantTitle?: string | null;
@@ -128,7 +180,11 @@ export interface PriceBreakdown {
       variantId?: string | null;
       quantity: number;
       name: string;
+      variantTitle?: string | null;
       sku: string;
+      price?: number;
+      mrp?: number;
+      image?: string | null;
     }[];
   }[];
 }

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { Combo, ComboInput, ComboItemDetail } from "@/types";
+import { Combo, ComboInput, ComboItemDetail, CustomComboSettings } from "@/types";
 import { revalidatePath } from "next/cache";
 
 function slugify(text: string): string {
@@ -21,6 +21,7 @@ export function revalidateComboCaches(slug?: string) {
     if (slug) {
       revalidatePath(`/combos/${slug}`, "page");
     }
+    revalidatePath("/build-your-combo", "page");
     revalidatePath("/admin/combos", "page");
   } catch (err) {
     console.warn("[ComboService] Revalidation notice:", err);
@@ -438,3 +439,209 @@ export async function reorderCombos(orders: { id: string; displayOrder: number }
   revalidateComboCaches();
   return true;
 }
+
+export const DEFAULT_CUSTOM_COMBO_SETTINGS: CustomComboSettings = {
+  isEnabled: true,
+  title: "Build Your Own Combo",
+  subtitle: "Create your bespoke luxury jewelry pairing. Select your favorite pieces and unlock an exclusive bundled gift discount.",
+  eligibleCategoryIds: [],
+  eligibleProductIds: [],
+  minItems: 2,
+  maxItems: 5,
+  minQuantityPerProduct: 1,
+  maxQuantityPerProduct: 3,
+  discountType: "percentage",
+  discountValue: 15,
+  maxDiscountAmount: 1500,
+  allowCouponsWithCombo: false,
+  startsAt: null,
+  endsAt: null,
+  showOnHomepage: true,
+  homepageDisplayOrder: 1,
+};
+
+export async function getCustomComboSettings(): Promise<CustomComboSettings> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("site_settings")
+      .select("value")
+      .eq("key", "custom_combo_settings")
+      .single();
+
+    if (error || !data?.value) {
+      return DEFAULT_CUSTOM_COMBO_SETTINGS;
+    }
+
+    return {
+      ...DEFAULT_CUSTOM_COMBO_SETTINGS,
+      ...data.value,
+    };
+  } catch (err) {
+    console.warn("[ComboService] Error reading custom_combo_settings:", err);
+    return DEFAULT_CUSTOM_COMBO_SETTINGS;
+  }
+}
+
+export async function updateCustomComboSettings(
+  input: Partial<CustomComboSettings>
+): Promise<CustomComboSettings> {
+  const current = await getCustomComboSettings();
+  const merged: CustomComboSettings = {
+    ...current,
+    ...input,
+    minItems: Math.max(1, input.minItems !== undefined ? Number(input.minItems) : current.minItems),
+    maxItems: Math.max(
+      input.minItems !== undefined ? Number(input.minItems) : current.minItems,
+      input.maxItems !== undefined ? Number(input.maxItems) : current.maxItems
+    ),
+    minQuantityPerProduct: Math.max(1, input.minQuantityPerProduct !== undefined ? Number(input.minQuantityPerProduct) : current.minQuantityPerProduct),
+    maxQuantityPerProduct: Math.max(
+      input.minQuantityPerProduct !== undefined ? Number(input.minQuantityPerProduct) : current.minQuantityPerProduct,
+      input.maxQuantityPerProduct !== undefined ? Number(input.maxQuantityPerProduct) : current.maxQuantityPerProduct
+    ),
+    discountValue: Math.max(0, input.discountValue !== undefined ? Number(input.discountValue) : current.discountValue),
+    maxDiscountAmount: input.maxDiscountAmount ? Math.max(0, Number(input.maxDiscountAmount)) : null,
+  };
+
+  const { error } = await supabaseAdmin
+    .from("site_settings")
+    .upsert({
+      key: "custom_combo_settings",
+      value: merged,
+      description: "Configuration and discount rules for Build Your Own Combo",
+      updated_at: new Date().toISOString(),
+    });
+
+  if (error) {
+    console.error("[ComboService] Update custom_combo_settings error:", error);
+    throw new Error(error.message || "Failed to update custom combo settings");
+  }
+
+  revalidateComboCaches();
+  return merged;
+}
+
+export async function getEligibleBuilderProducts(settings?: CustomComboSettings) {
+  const config = settings || (await getCustomComboSettings());
+
+  let query = supabaseAdmin
+    .from("products")
+    .select(`
+      id,
+      title,
+      slug,
+      sku,
+      base_price,
+      sale_price,
+      category_id,
+      status,
+      categories!products_category_id_fkey (
+        id,
+        name,
+        slug
+      ),
+      product_images (
+        image_url,
+        is_primary,
+        display_order
+      ),
+      product_variants (
+        id,
+        sku,
+        title,
+        price_override,
+        sale_price_override,
+        stock_quantity,
+        reserved_quantity,
+        is_active,
+        image_url
+      )
+    `)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+
+  if (config.eligibleProductIds && config.eligibleProductIds.length > 0) {
+    query = query.in("id", config.eligibleProductIds);
+  } else if (config.eligibleCategoryIds && config.eligibleCategoryIds.length > 0) {
+    query = query.in("category_id", config.eligibleCategoryIds);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[ComboService] Error fetching eligible products:", error);
+    return [];
+  }
+
+  return (data || []).map((p: any) => {
+    const images = (p.product_images || []).sort(
+      (a: any, b: any) => a.display_order - b.display_order
+    );
+    const primaryImg = images.find((i: any) => i.is_primary)?.image_url || images[0]?.image_url || "/placeholder.jpg";
+    const activeVariants = (p.product_variants || []).filter((v: any) => v.is_active);
+
+    const price = p.sale_price !== null ? Number(p.sale_price) : Number(p.base_price);
+    const mrp = Number(p.base_price);
+    const totalAvailableStock = activeVariants.reduce(
+      (acc: number, v: any) => acc + Math.max(0, (v.stock_quantity || 0) - (v.reserved_quantity || 0)),
+      0
+    );
+
+    return {
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      sku: p.sku,
+      price,
+      mrp,
+      image: primaryImg,
+      categoryId: p.category_id,
+      categoryName: p.categories?.name || "Jewellery",
+      categorySlug: p.categories?.slug || "all",
+      availableStock: totalAvailableStock,
+      inStock: totalAvailableStock > 0,
+      variants: activeVariants.map((v: any) => ({
+        id: v.id,
+        title: v.title,
+        sku: v.sku,
+        price: v.sale_price_override !== null
+          ? Number(v.sale_price_override)
+          : v.price_override !== null
+          ? Number(v.price_override)
+          : price,
+        stockQuantity: Math.max(0, (v.stock_quantity || 0) - (v.reserved_quantity || 0)),
+        image: v.image_url || primaryImg,
+      })),
+    };
+  });
+}
+
+export async function saveCustomComboOrderSnapshot(
+  orderId: string,
+  customerId: string | null,
+  customCombo: {
+    title: string;
+    components: any[];
+    subtotal: number;
+    discount: number;
+    finalPrice: number;
+  }
+) {
+  try {
+    const { error } = await supabaseAdmin.from("custom_combos").insert({
+      order_id: orderId,
+      customer_id: customerId || null,
+      combo_title: customCombo.title,
+      components: customCombo.components,
+      subtotal_amount: customCombo.subtotal,
+      discount_amount: customCombo.discount,
+      final_price: customCombo.finalPrice,
+    });
+
+    if (error) {
+      console.error("[ComboService] saveCustomComboOrderSnapshot error:", error);
+    }
+  } catch (err) {
+    console.error("[ComboService] saveCustomComboOrderSnapshot exception:", err);
+  }
+}
+

@@ -6,7 +6,7 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { getProducts, getCategories, getBanners } from "@/services/catalog.service";
 import { getPublicTestimonials, getTestimonialSectionSettings } from "@/services/testimonials.service";
 import { getPromotionalCoupon } from "@/services/pricing.service";
-import { getPublishedCombos } from "@/services/combo.service";
+import { getPublishedCombos, getCustomComboSettings } from "@/services/combo.service";
 import { ComboOffersSection } from "@/components/home/ComboOffersSection";
 import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award, ExternalLink } from "lucide-react";
 
@@ -15,7 +15,17 @@ import { Hero } from "@/components/home/Hero";
 export const revalidate = 60; // ISR cache 60 seconds
 
 export default async function HomePage() {
-  const [categories, featuredResult, bestSellersResult, testimonials, testimonialSection, banners, promoCoupon, combos] = await Promise.all([
+  const [
+    categories,
+    featuredResult,
+    bestSellersResult,
+    testimonials,
+    testimonialSection,
+    banners,
+    promoCoupon,
+    combos,
+    customComboSettings,
+  ] = await Promise.all([
     getCategories(),
     getProducts({ limit: 4, featured: true }),
     getProducts({ limit: 4, bestSeller: true }),
@@ -24,6 +34,7 @@ export default async function HomePage() {
     getBanners(),
     getPromotionalCoupon(),
     getPublishedCombos(),
+    getCustomComboSettings(),
   ]);
 
   const featuredProducts = featuredResult.products;
@@ -96,6 +107,9 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* CURATED GIFT SETS — EXCLUSIVE COMBO OFFERS */}
+        <ComboOffersSection combos={combos} builderSettings={customComboSettings} />
+
         {/* 3. NEW ARRIVALS & FEATURED PIECES */}
         <section className="py-20 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -163,9 +177,6 @@ export default async function HomePage() {
             </div>
           </section>
         )}
-
-        {/* COMBO OFFERS & CURATED GIFT SETS */}
-        <ComboOffersSection combos={combos} />
 
         {/* 5. BEST SELLERS */}
         <section className="py-20 bg-duskk-cream">

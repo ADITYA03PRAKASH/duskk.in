@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
-import { Combo } from "@/types";
+import { Combo, CustomComboSettings } from "@/types";
 import { useCart } from "@/context/CartContext";
 import {
   Gift,
@@ -18,7 +18,13 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
-export function CombosCatalogClient({ initialCombos }: { initialCombos: Combo[] }) {
+export function CombosCatalogClient({
+  initialCombos,
+  builderSettings,
+}: {
+  initialCombos: Combo[];
+  builderSettings?: CustomComboSettings | null;
+}) {
   const { addComboToCart } = useCart();
   const [combos] = useState<Combo[]>(initialCombos);
   const [searchQuery, setSearchQuery] = useState("");
@@ -103,6 +109,35 @@ export function CombosCatalogClient({ initialCombos }: { initialCombos: Combo[] 
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        {/* Build Your Own Combo Spotlight Banner */}
+        {builderSettings?.isEnabled && (
+          <div className="mb-8 rounded-2xl bg-white border border-duskk-gold/30 p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-duskk-gold/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="space-y-2 text-center md:text-left relative z-10">
+              <div className="inline-flex items-center space-x-2 text-duskk-gold text-xs font-mono tracking-widest uppercase bg-duskk-gold/10 px-3 py-1 rounded-full border border-duskk-gold/20">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Bespoke Jewelry Pairing</span>
+              </div>
+              <h2 className="font-serif text-2xl sm:text-3xl font-medium text-duskk-900">
+                Prefer to build your own gift set?
+              </h2>
+              <p className="text-xs sm:text-sm text-duskk-600 max-w-xl">
+                Select your own combination of {builderSettings.minItems} to {builderSettings.maxItems} pieces from our fine jewelry vault
+                {builderSettings.discountType !== "none"
+                  ? ` and unlock ${builderSettings.discountType === "percentage" ? `${builderSettings.discountValue}% off` : `₹${builderSettings.discountValue} off`}.`
+                  : "."}
+              </p>
+            </div>
+            <Link
+              href="/build-your-combo"
+              className="inline-flex items-center px-6 py-3.5 bg-duskk-900 text-white hover:bg-duskk-gold hover:text-duskk-950 text-xs font-semibold uppercase tracking-widest rounded-lg transition-all shadow shrink-0"
+            >
+              <span>Build Your Combo</span>
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Link>
+          </div>
+        )}
+
         {/* Controls Bar: Search & Sort */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-duskk-200 shadow-sm mb-8">
           <div className="relative w-full sm:w-80">

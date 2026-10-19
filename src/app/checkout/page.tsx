@@ -102,11 +102,25 @@ function CheckoutContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({
-            productId: i.comboId ? undefined : i.productId,
-            comboId: i.comboId,
-            quantity: i.quantity,
-          })),
+          items: items.map((i) => {
+            if (i.isCustomCombo) {
+              return {
+                isCustomCombo: true,
+                quantity: i.quantity,
+                customComponents: i.customComboComponents?.map((c) => ({
+                  productId: c.productId,
+                  variantId: c.variantId || null,
+                  quantity: c.quantity,
+                })),
+              };
+            }
+            return {
+              productId: i.comboId ? undefined : i.productId,
+              comboId: i.comboId,
+              variantId: i.variantId,
+              quantity: i.quantity,
+            };
+          }),
           couponCode: codeToApply.trim().toUpperCase(),
         }),
       });
@@ -174,15 +188,28 @@ function CheckoutContent() {
             pincode,
             landmark,
           },
-          items: items.map((i) => ({
-            productId: i.comboId ? undefined : i.productId,
-            comboId: i.comboId,
-            name: i.name,
-            price: i.price,
-            image: i.image,
-            variantId: i.variantId,
-            quantity: i.quantity,
-          })),
+          items: items.map((i) => {
+            if (i.isCustomCombo) {
+              return {
+                isCustomCombo: true,
+                quantity: i.quantity,
+                customComponents: i.customComboComponents?.map((c) => ({
+                  productId: c.productId,
+                  variantId: c.variantId || null,
+                  quantity: c.quantity,
+                })),
+              };
+            }
+            return {
+              productId: i.comboId ? undefined : i.productId,
+              comboId: i.comboId,
+              name: i.name,
+              price: i.price,
+              image: i.image,
+              variantId: i.variantId,
+              quantity: i.quantity,
+            };
+          }),
           couponCode: couponApplied?.code || couponCode.trim() || undefined,
           notes,
         }),
@@ -506,24 +533,43 @@ function CheckoutContent() {
 
                     {/* Compact Item Review */}
                     <div className="max-h-60 overflow-y-auto divide-y divide-duskk-100 pr-1">
-                      {items.map((i) => (
-                        <div key={i.comboId ? `combo_${i.comboId}` : (i.variantId ? `${i.productId}_${i.variantId}` : i.productId)} className="py-2.5 flex items-center justify-between text-xs">
-                          <div className="flex items-center space-x-3 min-w-0 pr-2">
-                            <img
-                              src={i.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=150&q=80"}
-                              alt={i.name}
-                              className="w-10 h-10 object-cover rounded bg-duskk-50 border border-duskk-100 flex-shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <p className="font-semibold text-duskk-900 line-clamp-1">{i.name}</p>
-                              <p className="text-[11px] text-duskk-500 font-mono">Qty: {i.quantity}</p>
+                      {items.map((i) => {
+                        const itemKey = i.isCustomCombo
+                          ? i.productId
+                          : i.comboId
+                          ? `combo_${i.comboId}`
+                          : i.variantId
+                          ? `${i.productId}_${i.variantId}`
+                          : i.productId;
+
+                        return (
+                          <div key={itemKey} className="py-2.5 flex items-center justify-between text-xs">
+                            <div className="flex items-center space-x-3 min-w-0 pr-2">
+                              <img
+                                src={i.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=150&q=80"}
+                                alt={i.name}
+                                className="w-10 h-10 object-cover rounded bg-duskk-50 border border-duskk-100 flex-shrink-0"
+                              />
+                              <div className="min-w-0">
+                                {i.isCustomCombo ? (
+                                  <span className="inline-block text-[9px] uppercase font-bold tracking-wider px-1 py-0.5 bg-duskk-gold/20 text-duskk-900 rounded mb-0.5">
+                                    Custom Combo
+                                  </span>
+                                ) : i.isCombo ? (
+                                  <span className="inline-block text-[9px] uppercase font-bold tracking-wider px-1 py-0.5 bg-duskk-gold/15 text-duskk-gold rounded mb-0.5">
+                                    Combo Offer
+                                  </span>
+                                ) : null}
+                                <p className="font-semibold text-duskk-900 line-clamp-1">{i.name}</p>
+                                <p className="text-[11px] text-duskk-500 font-mono">Qty: {i.quantity}</p>
+                              </div>
                             </div>
+                            <span className="font-medium text-duskk-900 whitespace-nowrap">
+                              {formatPrice(i.price * i.quantity)}
+                            </span>
                           </div>
-                          <span className="font-medium text-duskk-900 whitespace-nowrap">
-                            {formatPrice(i.price * i.quantity)}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* Coupon Section */}

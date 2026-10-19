@@ -198,6 +198,16 @@ export function Footer() {
                   Jewelry Cases & Organizers
                 </Link>
               </li>
+              <li>
+                <Link href="/combos" className="hover:text-duskk-gold transition">
+                  Curated Gift Combos
+                </Link>
+              </li>
+              <li>
+                <Link href="/build-your-combo" className="text-duskk-gold hover:underline transition font-medium">
+                  Build Your Own Combo ✨
+                </Link>
+              </li>
             </ul>
           </div>
 
