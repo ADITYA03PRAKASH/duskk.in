@@ -45,10 +45,17 @@ function CheckoutContent() {
   const [couponError, setCouponError] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Processing & Payment Modal State
   const [isInitializingPayment, setIsInitializingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [paymentModalData, setPaymentModalData] = useState<any | null>(null);
+  const [pendingVerification, setPendingVerification] = useState<{
+    orderNumber: string;
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+    customerEmail: string;
+  } | null>(null);
+  const [isRetryingVerification, setIsRetryingVerification] = useState(false);
 
   // Auto-apply coupon from query params when items are available
   useEffect(() => {
@@ -210,6 +217,68 @@ function CheckoutContent() {
     await applyCoupon(couponCode);
   };
 
+  const verifyAndFinalizePayment = async (params: {
+    orderNumber: string;
+    customerEmail: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => {
+    setIsRetryingVerification(true);
+    setErrorMessage("");
+
+    try {
+      const verifyRes = await fetch("/api/payments/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          razorpay_order_id: params.razorpay_order_id,
+          razorpay_payment_id: params.razorpay_payment_id,
+          razorpay_signature: params.razorpay_signature,
+        }),
+      });
+
+      const verifyData = await verifyRes.json();
+      if (verifyRes.ok && verifyData.success) {
+        clearCart();
+        setPendingVerification(null);
+        router.push(
+          `/order/success?orderNumber=${encodeURIComponent(
+            verifyData.data?.orderNumber || params.orderNumber
+          )}&email=${encodeURIComponent(
+            verifyData.data?.customerEmail || params.customerEmail
+          )}`
+        );
+      } else {
+        setPendingVerification({
+          orderNumber: params.orderNumber,
+          razorpayOrderId: params.razorpay_order_id,
+          razorpayPaymentId: params.razorpay_payment_id,
+          razorpaySignature: params.razorpay_signature,
+          customerEmail: params.customerEmail,
+        });
+        setErrorMessage(
+          verifyData.message ||
+            "Payment received by Razorpay, but confirmation is taking a few moments. Please click 'Complete Verification & View Order' below. Please DO NOT repay."
+        );
+      }
+    } catch (err: any) {
+      setPendingVerification({
+        orderNumber: params.orderNumber,
+        razorpayOrderId: params.razorpay_order_id,
+        razorpayPaymentId: params.razorpay_payment_id,
+        razorpaySignature: params.razorpay_signature,
+        customerEmail: params.customerEmail,
+      });
+      setErrorMessage(
+        "Network connection delay during payment verification. Your payment reference is saved. Please click 'Complete Verification & View Order' below."
+      );
+    } finally {
+      setIsRetryingVerification(false);
+      setIsInitializingPayment(false);
+    }
+  };
+
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
@@ -306,38 +375,13 @@ function CheckoutContent() {
         },
         themeColor: "#0F0F0F",
         onSuccess: async (response) => {
-          try {
-            // 3. Verify signature on backend
-            const verifyRes = await fetch("/api/payments/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
-
-            const verifyData = await verifyRes.json();
-            if (verifyRes.ok && verifyData.success) {
-              clearCart();
-              router.push(
-                `/order/success?orderNumber=${encodeURIComponent(
-                  verifyData.data?.orderNumber || orderData.orderNumber
-                )}&email=${encodeURIComponent(
-                  verifyData.data?.customerEmail || orderData.customer.email
-                )}`
-              );
-            } else {
-              setErrorMessage(
-                verifyData.message || "Payment signature verification failed. Please contact support."
-              );
-              setIsInitializingPayment(false);
-            }
-          } catch (err: any) {
-            setErrorMessage(err.message || "Payment verification failed.");
-            setIsInitializingPayment(false);
-          }
+          await verifyAndFinalizePayment({
+            orderNumber: orderData.orderNumber,
+            customerEmail: orderData.customer.email,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
         },
         onDismiss: () => {
           setIsInitializingPayment(false);
@@ -400,7 +444,53 @@ function CheckoutContent() {
             </div>
           ) : (
             <form onSubmit={handleProceedToPayment}>
-              {errorMessage && (
+              {pendingVerification && (
+                <div className="mb-6 p-5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs space-y-3 shadow-sm">
+                  <div className="flex items-start space-x-2">
+                    <Sparkles className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm text-amber-950">Payment Received &bull; Order Confirmation Pending</h4>
+                      <p className="mt-1 text-amber-800 leading-relaxed">
+                        Your payment for Order <strong>#{pendingVerification.orderNumber}</strong> was captured by Razorpay (Payment ID: <span className="font-mono font-semibold">{pendingVerification.razorpayPaymentId}</span>).
+                        Please do NOT pay again. Click the button below to complete verification and view your receipt.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        verifyAndFinalizePayment({
+                          orderNumber: pendingVerification.orderNumber,
+                          customerEmail: pendingVerification.customerEmail,
+                          razorpay_order_id: pendingVerification.razorpayOrderId,
+                          razorpay_payment_id: pendingVerification.razorpayPaymentId,
+                          razorpay_signature: pendingVerification.razorpaySignature,
+                        })
+                      }
+                      disabled={isRetryingVerification}
+                      className="px-4 py-2.5 bg-amber-900 hover:bg-amber-800 text-white font-semibold rounded transition flex items-center space-x-1.5 shadow"
+                    >
+                      {isRetryingVerification ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verifying Confirmation...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Complete Verification & View Order</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-[11px] text-amber-800">
+                      Concierge Support: <a href="mailto:duskk.india@gmail.com" className="underline font-semibold">duskk.india@gmail.com</a>
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {errorMessage && !pendingVerification && (
                 <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded text-rose-800 text-xs flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{errorMessage}</span>

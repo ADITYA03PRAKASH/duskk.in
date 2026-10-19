@@ -308,6 +308,7 @@ export interface OrderEmailData {
   orderNumber: string;
   customerName: string;
   customerEmail: string;
+  orderDate?: string | Date;
   items: {
     productName: string;
     productSku: string;
@@ -331,9 +332,21 @@ export interface OrderEmailData {
   };
 }
 
-export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<boolean> {
+export async function sendOrderConfirmationEmailDetailed(data: OrderEmailData): Promise<EmailSendResult> {
   const siteUrl = getSiteUrl();
-  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK Orders <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
+
+  const formattedDate = data.orderDate
+    ? new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(new Date(data.orderDate))
+    : new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(new Date());
 
   const itemsHtml = data.items
     .map(
@@ -353,13 +366,13 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
 
   const bodyContent = `
     <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif;">Thank You for Your Order, ${data.customerName}!</h2>
-    <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">
-      Your order <strong style="color: #111111;">#${data.orderNumber}</strong> has been confirmed. Our team is now carefully preparing and inspecting your items before dispatch.
+    <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      Your payment has been successfully verified, and order <strong style="color: #111111;">#${data.orderNumber}</strong> placed on ${formattedDate} is now officially confirmed. Our master jewelers and quality inspection team are preparing your pieces with the utmost care.
     </p>
 
     <div style="background-color: #FAF8F5; border-left: 4px solid #C5A880; padding: 14px 18px; margin-bottom: 28px; border-radius: 0 4px 4px 0;">
       <p style="margin: 0; font-size: 13px; color: #333333; line-height: 1.5;">
-        <strong>Order Tracking:</strong> You can track your order status anytime at <a href="${siteUrl}/order/track" style="color: #9A7B4F; text-decoration: underline; font-weight: 600;">duskk.in/order/track</a> using your Order Number and Email Address.
+        <strong>Live Tracking:</strong> Track your shipment progress anytime at <a href="${siteUrl}/order/track" style="color: #9A7B4F; text-decoration: underline; font-weight: 600;">duskk.in/order/track</a> using your Order Number (<strong>${data.orderNumber}</strong>) and Email Address (<strong>${data.customerEmail}</strong>).
       </p>
     </div>
 
@@ -384,36 +397,55 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
           : ""
       }
       <tr>
-        <td style="padding: 6px 0; color: #666666;">Shipping</td>
+        <td style="padding: 6px 0; color: #666666;">Shipping Charges</td>
         <td style="padding: 6px 0; text-align: right; color: #111111;">
           ${data.financials.shippingCharge === 0 ? "FREE" : formatPrice(data.financials.shippingCharge)}
         </td>
       </tr>
+      ${
+        data.financials.tax > 0
+          ? `<tr>
+              <td style="padding: 6px 0; color: #666666;">Taxes (GST)</td>
+              <td style="padding: 6px 0; text-align: right; color: #111111;">${formatPrice(data.financials.tax)}</td>
+            </tr>`
+          : ""
+      }
       <tr style="border-top: 1px solid #111111;">
-        <td style="padding: 12px 0; font-weight: bold; font-size: 16px; color: #111111;">Total Paid</td>
+        <td style="padding: 12px 0; font-weight: bold; font-size: 16px; color: #111111;">Final Paid Amount (INR)</td>
         <td style="padding: 12px 0; font-weight: bold; font-size: 16px; text-align: right; color: #111111;">${formatPrice(data.financials.totalAmount)}</td>
       </tr>
     </table>
 
     <!-- Shipping Address Snapshot -->
     <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #EAEAEA;">
-      <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #111111;">Delivery Address</h4>
+      <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #111111;">Delivery Destination</h4>
       <p style="margin: 0; color: #555555; font-size: 13px; line-height: 1.5;">
         ${data.customerName}<br/>
         ${data.shippingAddress.addressLine1}${data.shippingAddress.addressLine2 ? `, ${data.shippingAddress.addressLine2}` : ""}<br/>
         ${data.shippingAddress.city}, ${data.shippingAddress.state} - ${data.shippingAddress.pincode}
       </p>
     </div>
+
+    <!-- Customer Support -->
+    <div style="margin-top: 28px; padding: 16px; background-color: #FAF8F5; border-radius: 4px; font-size: 12px; color: #666666; line-height: 1.5;">
+      Need assistance with your purchase? Contact our concierge team anytime at <a href="mailto:duskk.india@gmail.com" style="color: #9A7B4F; text-decoration: underline; font-weight: 600;">duskk.india@gmail.com</a>.
+    </div>
   `;
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  return executeSendMail({
+  return executeSendMailDetailed({
     from: fromAddress,
     to: data.customerEmail,
-    subject: `DUSKK Order Confirmation — ${data.orderNumber}`,
+    replyTo: "duskk.india@gmail.com",
+    subject: `DUSKK Order Confirmation — #${data.orderNumber}`,
     html: emailHtml,
   });
+}
+
+export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<boolean> {
+  const res = await sendOrderConfirmationEmailDetailed(data);
+  return res.success;
 }
 
 // ---------------------------------------------------------------------------

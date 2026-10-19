@@ -37,7 +37,8 @@ export async function GET() {
           status,
           grand_total,
           created_at,
-          customer_snapshot
+          customer_snapshot,
+          payments (status, razorpay_payment_id)
         `)
         .order("created_at", { ascending: false })
         .limit(8),
@@ -81,6 +82,13 @@ export async function GET() {
 
     const formattedRecentOrders = (recentOrders || []).map((o: any) => {
       const snap = o.customer_snapshot as any;
+      const pay = o.payments?.[0] as any;
+      const paymentStatus = pay?.status
+        ? pay.status.toUpperCase()
+        : ["PAID", "CONFIRMED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status)
+        ? "CAPTURED"
+        : "PENDING";
+
       return {
         id: o.id,
         orderNumber: o.order_number,
@@ -88,6 +96,7 @@ export async function GET() {
         customerEmail: snap?.email,
         totalAmount: Number(o.grand_total),
         orderStatus: o.status,
+        paymentStatus,
         createdAt: o.created_at,
       };
     });

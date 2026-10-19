@@ -45,16 +45,17 @@ export async function POST(req: NextRequest) {
 
     // 2. Process event
     if (eventType === "payment.captured" || eventType === "order.paid") {
-      const paymentEntity = payload.payment?.entity || payload.order?.entity;
-      const razorpayOrderId = paymentEntity.order_id || paymentEntity.id;
-      const razorpayPaymentId = paymentEntity.id;
+      const orderEntity = payload.order?.entity;
+      const paymentEntity = payload.payment?.entity;
+      const razorpayOrderId = paymentEntity?.order_id || orderEntity?.id;
+      const razorpayPaymentId = paymentEntity?.id || (orderEntity?.id ? `pay_${orderEntity.id}` : "webhook_captured");
 
       if (razorpayOrderId) {
         await confirmOrderPayment(
           razorpayOrderId,
           razorpayPaymentId,
           signature || "webhook_verified",
-          paymentEntity.method || "webhook"
+          paymentEntity?.method || "webhook"
         ).catch((err) => console.log("Webhook confirmation note:", err.message));
       }
     } else if (eventType === "payment.failed") {

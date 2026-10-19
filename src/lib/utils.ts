@@ -53,6 +53,21 @@ export const ORDER_STATUS_LABELS: Record<string, { label: string; color: string;
   REFUNDED: { label: "Refunded", color: "bg-gray-100 text-gray-800", step: -1 },
 };
 
+export const PAYMENT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  CREATED: { label: "Payment Initiated", color: "bg-amber-100 text-amber-800" },
+  PENDING: { label: "Payment Pending", color: "bg-amber-100 text-amber-800" },
+  AUTHORIZED: { label: "Authorized", color: "bg-blue-100 text-blue-800" },
+  CAPTURED: { label: "Captured", color: "bg-emerald-100 text-emerald-800" },
+  PAID: { label: "Paid", color: "bg-emerald-100 text-emerald-800" },
+  FAILED: { label: "Payment Failed", color: "bg-rose-100 text-rose-800" },
+  REFUNDED: { label: "Refunded", color: "bg-purple-100 text-purple-800" },
+};
+
+export function getPaymentStatusBadge(status?: string | null): { label: string; color: string } {
+  const norm = (status || "PENDING").toUpperCase();
+  return PAYMENT_STATUS_LABELS[norm] || { label: norm, color: "bg-gray-100 text-gray-800" };
+}
+
 /**
  * Normalizes any product or media image reference into a reliably accessible URL.
  * Converts direct Supabase Storage URLs (which are blocked by Indian ISP DNS sinkholes)

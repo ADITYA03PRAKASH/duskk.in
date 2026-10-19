@@ -6,6 +6,7 @@ import { findOrCreateCustomer, saveCustomerAddress } from "./customer.service";
 import { createRazorpayOrder } from "./payment.service";
 import {
   sendOrderConfirmationEmail,
+  sendOrderConfirmationEmailDetailed,
   sendOrderStatusUpdateEmail,
   sendRefundEmail,
 } from "./email.service";
@@ -290,6 +291,8 @@ export async function confirmOrderPayment(
       shipping_amount,
       tax_amount,
       grand_total,
+      admin_notes,
+      created_at,
       customer_snapshot,
       shipping_address_snapshot,
       order_items (*)
@@ -306,34 +309,75 @@ export async function confirmOrderPayment(
   const customerName = `${customerSnapshot?.first_name || ""} ${customerSnapshot?.last_name || ""}`.trim() || "Valued Customer";
   const customerEmail = customerSnapshot?.email;
 
-  // Send confirmation email asynchronously
+  // Send confirmation email asynchronously and idempotently (do not block or fail valid order)
   if (customerEmail) {
-    sendOrderConfirmationEmail({
-      orderNumber: order.order_number,
-      customerName,
-      customerEmail,
-      items: (order.order_items as any[]).map((i) => ({
-        productName: i.product_title,
-        productSku: i.sku,
-        price: Number(i.unit_sale_price || i.unit_price),
-        quantity: i.quantity,
-        subtotal: Number(i.total_price),
-      })),
-      financials: {
-        subtotal: Number(order.subtotal_amount),
-        discount: Number(order.discount_amount),
-        shippingCharge: Number(order.shipping_amount),
-        tax: Number(order.tax_amount),
-        totalAmount: Number(order.grand_total),
-      },
-      shippingAddress: {
-        addressLine1: shippingSnapshot?.address_line1 || "",
-        addressLine2: shippingSnapshot?.address_line2 || null,
-        city: shippingSnapshot?.city || "",
-        state: shippingSnapshot?.state || "",
-        pincode: shippingSnapshot?.postal_code || "",
-      },
-    }).catch((err) => console.error("Email send error:", err));
+    const alreadySent = order.admin_notes && order.admin_notes.includes("[CONFIRMATION_EMAIL_SENT]");
+    if (!alreadySent) {
+      sendOrderConfirmationEmailDetailed({
+        orderNumber: order.order_number,
+        customerName,
+        customerEmail,
+        orderDate: order.created_at,
+        items: (order.order_items as any[]).map((i) => ({
+          productName: i.product_title,
+          productSku: i.sku,
+          price: Number(i.unit_sale_price || i.unit_price),
+          quantity: i.quantity,
+          subtotal: Number(i.total_price),
+        })),
+        financials: {
+          subtotal: Number(order.subtotal_amount),
+          discount: Number(order.discount_amount),
+          shippingCharge: Number(order.shipping_amount),
+          tax: Number(order.tax_amount),
+          totalAmount: Number(order.grand_total),
+        },
+        shippingAddress: {
+          addressLine1: shippingSnapshot?.address_line1 || "",
+          addressLine2: shippingSnapshot?.address_line2 || null,
+          city: shippingSnapshot?.city || "",
+          state: shippingSnapshot?.state || "",
+          pincode: shippingSnapshot?.postal_code || "",
+        },
+      })
+        .then(async (result) => {
+          const timestamp = new Date().toISOString();
+          if (result.success) {
+            const auditTag = `[CONFIRMATION_EMAIL_SENT: ${timestamp} | messageId: ${result.messageId || "accepted"}]`;
+            const updatedAdminNotes = order.admin_notes ? `${order.admin_notes}\n${auditTag}` : auditTag;
+            await supabaseAdmin
+              .from("orders")
+              .update({ admin_notes: updatedAdminNotes })
+              .eq("id", orderId);
+
+            await supabaseAdmin
+              .from("payments")
+              .update({
+                metadata: {
+                  confirmation_email: {
+                    sent: true,
+                    sent_at: timestamp,
+                    message_id: result.messageId,
+                    recipient: customerEmail,
+                    provider_response: result.response,
+                  },
+                },
+              })
+              .eq("order_id", orderId);
+          } else {
+            console.warn(`Order confirmation email delivery attempted but failed for order ${order.order_number}:`, result.error);
+            const failTag = `[CONFIRMATION_EMAIL_FAILED: ${timestamp} | error: ${result.error || "transmission failure"}]`;
+            const updatedAdminNotes = order.admin_notes ? `${order.admin_notes}\n${failTag}` : failTag;
+            await supabaseAdmin
+              .from("orders")
+              .update({ admin_notes: updatedAdminNotes })
+              .eq("id", orderId);
+          }
+        })
+        .catch((err) => {
+          console.error("Non-fatal email dispatch error:", err);
+        });
+    }
   }
 
   return order;

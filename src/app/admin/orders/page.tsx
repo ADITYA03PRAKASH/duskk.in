@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { formatPrice, formatDate, ORDER_STATUS_LABELS } from "@/lib/utils";
+import { formatPrice, formatDate, ORDER_STATUS_LABELS, getPaymentStatusBadge } from "@/lib/utils";
 import {
   ShoppingBag,
   Search,
@@ -227,15 +227,16 @@ export default function AdminOrdersPage() {
                     </td>
 
                     <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          order.paymentStatus === "PAID"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {order.paymentStatus}
-                      </span>
+                      {(() => {
+                        const badge = getPaymentStatusBadge(order.paymentStatus);
+                        return (
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${badge.color}`}
+                          >
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     <td className="py-3 px-4">
@@ -453,6 +454,17 @@ export default function AdminOrdersPage() {
                 <span className="font-bold text-duskk-900 uppercase tracking-wider block mb-1">
                   Payment Reference
                 </span>
+                <div className="flex justify-between items-center">
+                  <span>Payment Status:</span>
+                  {(() => {
+                    const badge = getPaymentStatusBadge(selectedOrder.paymentStatus);
+                    return (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${badge.color}`}>
+                        {badge.label}
+                      </span>
+                    );
+                  })()}
+                </div>
                 <div className="flex justify-between">
                   <span>Razorpay Order ID:</span>
                   <span className="font-mono">{selectedOrder.razorpayOrderId || "N/A"}</span>

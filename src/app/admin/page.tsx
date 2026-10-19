@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { formatPrice, formatDate, ORDER_STATUS_LABELS } from "@/lib/utils";
+import { formatPrice, formatDate, ORDER_STATUS_LABELS, getPaymentStatusBadge } from "@/lib/utils";
 import {
   IndianRupee,
   ShoppingBag,
@@ -182,15 +182,16 @@ export default function AdminDashboardPage() {
                         {formatPrice(order.totalAmount)}
                       </td>
                       <td className="py-3 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
-                            order.paymentStatus === "PAID"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          {order.paymentStatus}
-                        </span>
+                        {(() => {
+                          const badge = getPaymentStatusBadge(order.paymentStatus);
+                          return (
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${badge.color}`}
+                            >
+                              {badge.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-3">
                         <span
