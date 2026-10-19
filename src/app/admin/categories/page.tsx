@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { Plus, Edit2, Trash2, X, Check, Loader2, Upload, Image as ImageIcon } from "lucide-react";
 
 export default function AdminCategoriesPage() {
@@ -200,13 +201,23 @@ export default function AdminCategoriesPage() {
           </h1>
         </div>
 
-        <button
-          onClick={openCreate}
-          className="px-4 py-2 bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white text-xs font-semibold uppercase tracking-widest rounded transition flex items-center space-x-1"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Category</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <Link
+            href="/admin/banners"
+            className="px-3.5 py-2 bg-white hover:bg-duskk-50 text-duskk-800 border border-duskk-300 text-xs font-semibold uppercase tracking-wider rounded transition flex items-center space-x-1.5 shadow-sm"
+          >
+            <ImageIcon className="w-4 h-4 text-duskk-600" />
+            <span>Category Page Banners</span>
+          </Link>
+
+          <button
+            onClick={openCreate}
+            className="px-4 py-2 bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white text-xs font-semibold uppercase tracking-widest rounded transition flex items-center space-x-1"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Category</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

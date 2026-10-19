@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { formatPrice } from "@/lib/utils";
-import { CustomComboSettings } from "@/types";
+import { formatPrice, normalizeImageUrl } from "@/lib/utils";
+import { CustomComboSettings, PageBannerConfig } from "@/types";
 import { useCart, CustomComboComponentCart } from "@/context/CartContext";
 import {
   Gift,
@@ -68,16 +68,19 @@ export function BuildYourComboClient({
   initialSettings,
   initialCategories,
   initialProducts,
+  initialBanner,
 }: {
   initialSettings: CustomComboSettings;
   initialCategories: any[];
   initialProducts: BuilderProduct[];
+  initialBanner?: PageBannerConfig | null;
 }) {
   const { addCustomComboToCart } = useCart();
 
   const [settings] = useState<CustomComboSettings>(initialSettings);
   const [categories] = useState<any[]>(initialCategories);
   const [products] = useState<BuilderProduct[]>(initialProducts);
+  const [banner] = useState<PageBannerConfig | null>(initialBanner || null);
 
   // Selected products for the custom combo
   const [selectedItems, setSelectedItems] = useState<SelectedComboItem[]>([]);
@@ -359,63 +362,91 @@ export function BuildYourComboClient({
   return (
     <div className="pb-28">
       {/* 1. HERO HEADER */}
-      <section className="bg-duskk-900 text-white py-14 sm:py-16 px-4 sm:px-6 lg:px-8 border-b border-white/10 relative overflow-hidden">
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-duskk-gold/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="max-w-7xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center space-x-2 text-duskk-gold bg-duskk-800/80 px-3.5 py-1 rounded-full text-xs font-mono tracking-widest uppercase mb-3 border border-duskk-gold/20 shadow-sm">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Interactive Custom Atelier</span>
-          </div>
-
-          <h1 className="font-serif text-3xl sm:text-5xl font-medium tracking-tight text-white">
-            {settings.title}
-          </h1>
-
-          <p className="text-duskk-300 text-xs sm:text-sm max-w-2xl mx-auto mt-2 leading-relaxed">
-            {settings.subtitle}
-          </p>
-
-          {/* Discount Policy Pill Banner */}
-          {settings.discountType !== "none" && (
-            <div className="mt-6 inline-flex items-center space-x-2 bg-duskk-gold/15 border border-duskk-gold/40 text-duskk-champagne px-4 py-1.5 rounded-full text-xs font-medium">
-              <Gift className="w-4 h-4 text-duskk-gold flex-shrink-0" />
-              <span>
-                Select between <strong>{settings.minItems}</strong> and <strong>{settings.maxItems}</strong> eligible pieces to unlock{" "}
-                <strong className="text-white">
-                  {settings.discountType === "percentage"
-                    ? `${settings.discountValue}% OFF`
-                    : `₹${settings.discountValue} OFF`}
-                </strong>
-                {settings.maxDiscountAmount ? ` (Up to ₹${settings.maxDiscountAmount})` : ""}
-              </span>
-            </div>
+      {banner?.isEnabled !== false && (
+        <section className="bg-duskk-900 text-white py-14 sm:py-16 px-4 sm:px-6 lg:px-8 border-b border-white/10 relative overflow-hidden">
+          {banner?.imageUrl ? (
+            <>
+              <div className="absolute inset-0 w-full h-full">
+                <img
+                  src={normalizeImageUrl(banner.imageUrl)}
+                  alt={banner.title || settings.title || "Build Your Own Combo"}
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: banner.objectPosition || "center" }}
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              </div>
+              <div
+                className="absolute inset-0 bg-duskk-950 transition-opacity"
+                style={{ opacity: Math.max(0, Math.min(100, banner.overlayOpacity ?? 50)) / 100 }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/30 pointer-events-none" />
+            </>
+          ) : (
+            <div className="absolute top-0 right-1/4 w-96 h-96 bg-duskk-gold/5 rounded-full blur-3xl pointer-events-none" />
           )}
 
-          {/* 3 Step Interactive Progress Pills */}
-          <div className="grid grid-cols-3 gap-3 max-w-xl mx-auto mt-8 text-xs border-t border-white/10 pt-6">
-            <div className={`flex flex-col items-center text-center space-y-1 ${selectedItems.length > 0 ? "text-duskk-gold" : "text-duskk-400"}`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${selectedItems.length > 0 ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
-                1
+          <div className="max-w-7xl mx-auto text-center relative z-10">
+            {(banner?.label ?? "Interactive Custom Atelier") && (
+              <div className="inline-flex items-center space-x-2 text-duskk-gold bg-duskk-800/80 px-3.5 py-1 rounded-full text-xs font-mono tracking-widest uppercase mb-3 border border-duskk-gold/20 shadow-sm backdrop-blur-sm">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{banner?.label ?? "Interactive Custom Atelier"}</span>
               </div>
-              <span className="text-[11px] font-medium uppercase tracking-wider">Browse & Pick</span>
-            </div>
+            )}
 
-            <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.isComplete ? "text-duskk-gold" : "text-duskk-400"}`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.isComplete ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
-                2
-              </div>
-              <span className="text-[11px] font-medium uppercase tracking-wider">Configure Sizes</span>
-            </div>
+            <h1 className="font-serif text-3xl sm:text-5xl font-medium tracking-tight text-white drop-shadow-sm">
+              {banner?.title ?? settings.title}
+            </h1>
 
-            <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.isComplete ? "text-emerald-400 font-semibold" : "text-duskk-400"}`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.isComplete ? "bg-emerald-500 text-white" : "bg-white/10 text-white"}`}>
-                3
+            {(banner?.description ?? settings.subtitle) && (
+              <p className="text-duskk-200 text-xs sm:text-sm max-w-2xl mx-auto mt-2 leading-relaxed drop-shadow font-light">
+                {banner?.description ?? settings.subtitle}
+              </p>
+            )}
+
+            {/* Discount Policy Pill Banner */}
+            {settings.discountType !== "none" && (
+              <div className="mt-6 inline-flex items-center space-x-2 bg-duskk-gold/15 border border-duskk-gold/40 text-duskk-champagne px-4 py-1.5 rounded-full text-xs font-medium">
+                <Gift className="w-4 h-4 text-duskk-gold flex-shrink-0" />
+                <span>
+                  Select between <strong>{settings.minItems}</strong> and <strong>{settings.maxItems}</strong> eligible pieces to unlock{" "}
+                  <strong className="text-white">
+                    {settings.discountType === "percentage"
+                      ? `${settings.discountValue}% OFF`
+                      : `₹${settings.discountValue} OFF`}
+                  </strong>
+                  {settings.maxDiscountAmount ? ` (Up to ₹${settings.maxDiscountAmount})` : ""}
+                </span>
               </div>
-              <span className="text-[11px] font-medium uppercase tracking-wider">Review & Save</span>
+            )}
+
+            {/* 3 Step Interactive Progress Pills */}
+            <div className="grid grid-cols-3 gap-3 max-w-xl mx-auto mt-8 text-xs border-t border-white/10 pt-6">
+              <div className={`flex flex-col items-center text-center space-y-1 ${selectedItems.length > 0 ? "text-duskk-gold" : "text-duskk-400"}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${selectedItems.length > 0 ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
+                  1
+                </div>
+                <span className="text-[11px] font-medium uppercase tracking-wider">Browse & Pick</span>
+              </div>
+
+              <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.isComplete ? "text-duskk-gold" : "text-duskk-400"}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.isComplete ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
+                  2
+                </div>
+                <span className="text-[11px] font-medium uppercase tracking-wider">Configure Sizes</span>
+              </div>
+
+              <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.isComplete ? "text-emerald-400 font-semibold" : "text-duskk-400"}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.isComplete ? "bg-emerald-500 text-white" : "bg-white/10 text-white"}`}>
+                  3
+                </div>
+                <span className="text-[11px] font-medium uppercase tracking-wider">Review & Save</span>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* 2. CATALOG FILTERS & SEARCH BAR */}
       <section className="bg-white border-b border-duskk-200 sticky top-16 z-20 shadow-xs">

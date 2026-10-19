@@ -4,6 +4,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
 import { getCategoryBySlug, getProducts } from "@/services/catalog.service";
+import { getPageBanner } from "@/services/banner.service";
+import { CategoryPageBanner } from "@/components/layout/CategoryPageBanner";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -18,7 +20,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const { slug } = params;
   const { sort } = searchParams;
 
-  const category = await getCategoryBySlug(slug);
+  const [category, pageBanner] = await Promise.all([
+    getCategoryBySlug(slug),
+    getPageBanner(slug),
+  ]);
 
   if (!category) {
     notFound();
@@ -31,7 +36,6 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   });
 
   const products = productsResult.products;
-
 
   return (
     <>
@@ -50,26 +54,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           </div>
 
           {/* Category Banner / Header */}
-          <div className="bg-duskk-900 text-white p-8 sm:p-12 mb-10 relative overflow-hidden">
-            <div className="relative z-10 max-w-xl">
-              <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
-                COLLECTION
-              </span>
-              <h1 className="font-serif text-3xl sm:text-4xl text-white font-light mb-3">
-                {category.name}
-              </h1>
-              {category.description && (
-                <p className="text-xs sm:text-sm text-duskk-200 leading-relaxed">
-                  {category.description}
-                </p>
-              )}
-            </div>
-            {category.image && (
-              <div className="absolute right-0 inset-y-0 w-1/3 opacity-20 sm:opacity-30 overflow-hidden hidden sm:block">
-                <img src={category.image} alt={category.name} className="w-full h-full object-cover" />
-              </div>
-            )}
-          </div>
+          <CategoryPageBanner
+            banner={pageBanner}
+            fallbackTitle={category.name}
+            fallbackLabel="COLLECTION"
+            fallbackDescription={category.description || undefined}
+          />
 
           {/* Sorting Header */}
           <div className="flex justify-between items-center mb-8 border-b border-duskk-200 pb-4">

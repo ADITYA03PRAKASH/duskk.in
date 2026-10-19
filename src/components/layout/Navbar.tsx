@@ -21,8 +21,28 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
   const [promoCoupon, setPromoCoupon] = useState<PublicPromotionalCoupon | null>(
     initialPromoCoupon ?? null
   );
+  const [shippingAnnouncement, setShippingAnnouncement] = useState<string>(
+    "Complimentary Express Shipping Across India On Orders Above ₹999"
+  );
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/shipping/config")
+      .then((res) => res.json())
+      .then((resData) => {
+        if (isMounted && resData.success && resData.data?.announcementText) {
+          setShippingAnnouncement(resData.data.announcementText);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to load dynamic shipping announcement:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (initialPromoCoupon !== undefined) return;
@@ -121,7 +141,7 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
       {/* Announcement Top Bar */}
       <div className="bg-duskk-900 text-duskk-champagne text-[11px] font-medium py-2 px-4 tracking-widest text-center uppercase flex items-center justify-center space-x-3 border-b border-white/10">
         <Sparkles className="w-3.5 h-3.5 text-duskk-gold animate-pulse flex-shrink-0" />
-        <span>Complimentary Express Shipping Across India On Orders Above ₹999</span>
+        <span>{shippingAnnouncement}</span>
         {promoCoupon && (
           <>
             <span className="hidden sm:inline">&bull;</span>

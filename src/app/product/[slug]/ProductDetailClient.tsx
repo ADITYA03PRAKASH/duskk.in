@@ -49,16 +49,27 @@ export function ProductDetailClient({ product }: { product: any }) {
   const isOutOfStock = product.stockQuantity <= 0;
   const isLowStock = product.stockQuantity > 0 && product.stockQuantity <= 5;
 
-  const totalRatings = product.reviews?.length || 0;
-  const avgRating =
-    totalRatings > 0
+  const isDisplayRatingEnabled = product.displayRating !== false;
+  const isCustomRating = product.ratingSource === "CUSTOM";
+  const genuineApprovedReviews = product.reviews || [];
+  const genuineReviewCount = genuineApprovedReviews.length;
+
+  const displayAvgRating =
+    typeof product.avgRating === "number"
+      ? product.avgRating
+      : genuineReviewCount > 0
       ? Number(
           (
-            product.reviews.reduce((acc: number, r: any) => acc + r.rating, 0) /
-            totalRatings
+            genuineApprovedReviews.reduce((acc: number, r: any) => acc + Number(r.rating || 0), 0) /
+            genuineReviewCount
           ).toFixed(1)
         )
       : 4.9;
+
+  const displayReviewCount =
+    typeof product.reviewCount === "number"
+      ? product.reviewCount
+      : genuineReviewCount || 14;
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
@@ -190,22 +201,28 @@ export function ProductDetailClient({ product }: { product: any }) {
         </div>
 
         {/* Ratings & Review count */}
-        <div className="flex items-center space-x-3 pb-4 border-b border-duskk-200">
-          <div className="flex items-center text-amber-500">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                className={`w-4 h-4 ${
-                  i < Math.floor(avgRating) ? "fill-current" : "text-duskk-300"
-                }`}
-              />
-            ))}
+        {isDisplayRatingEnabled && (
+          <div className="flex items-center space-x-3 pb-4 border-b border-duskk-200">
+            <div className="flex items-center text-amber-500">
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  className={`w-4 h-4 ${
+                    i < Math.floor(displayAvgRating) ? "fill-current" : "text-duskk-300"
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs font-semibold text-duskk-900">{displayAvgRating.toFixed(1)} / 5.0</span>
+            <span className="text-xs text-duskk-500">
+              {isCustomRating
+                ? `(${displayReviewCount} Ratings)`
+                : genuineReviewCount > 0
+                ? `(${genuineReviewCount} Verified Customer Reviews)`
+                : `(${displayReviewCount} Ratings)`}
+            </span>
           </div>
-          <span className="text-xs font-semibold text-duskk-900">{avgRating} / 5.0</span>
-          <span className="text-xs text-duskk-500">
-            ({totalRatings || 18} Verified Customer Reviews)
-          </span>
-        </div>
+        )}
 
         {/* Pricing Block */}
         <div className="space-y-1">
@@ -364,12 +381,14 @@ export function ProductDetailClient({ product }: { product: any }) {
             </div>
           )}
           {product.specifications && typeof product.specifications === "object" &&
-            Object.entries(product.specifications).map(([key, val]) => (
-              <div key={key} className="p-3 flex justify-between">
-                <span className="text-duskk-500 font-medium">{key}:</span>
-                <span className="text-duskk-900 font-semibold">{String(val)}</span>
-              </div>
-            ))}
+            Object.entries(product.specifications)
+              .filter(([key]) => key !== "rating_settings")
+              .map(([key, val]) => (
+                <div key={key} className="p-3 flex justify-between">
+                  <span className="text-duskk-500 font-medium">{key}:</span>
+                  <span className="text-duskk-900 font-semibold">{String(val)}</span>
+                </div>
+              ))}
         </div>
 
         {/* Accordions */}

@@ -153,6 +153,7 @@ export interface PriceBreakdown {
   subtotal: number;
   discount: number;
   shippingCharge: number;
+  shippingDetails?: ShippingCalculationResult;
   tax: number;
   totalAmount: number;
   couponApplied?: {
@@ -245,3 +246,108 @@ export type OrderStatus =
   | "REFUNDED";
 
 export type PaymentStatus = "created" | "authorized" | "captured" | "failed" | "refund_pending" | "refunded";
+
+export interface ShippingSettings {
+  isEnabled: boolean;
+  methodName: string;
+  defaultCharge: number;
+  currency: string;
+  estimatedDeliveryText?: string;
+
+  // Free shipping rules
+  globalFreeShipping: {
+    isEnabled: boolean;
+    label?: string;
+  };
+
+  minOrderThreshold: {
+    isEnabled: boolean;
+    minSubtotal: number;
+    label?: string;
+  };
+
+  scheduledPromotion: {
+    isEnabled: boolean;
+    promotionName: string;
+    startsAt: string | null;
+    endsAt: string | null;
+  };
+
+  productSpecificRules: {
+    isEnabled: boolean;
+    eligibleProductIds: string[];
+    entireOrderFree: boolean;
+  };
+
+  categorySpecificRules: {
+    isEnabled: boolean;
+    eligibleCategoryIds: string[];
+    entireOrderFree: boolean;
+  };
+}
+
+export type ShippingRuleApplied =
+  | "GLOBAL_FREE_SHIPPING"
+  | "SCHEDULED_PROMOTION"
+  | "MIN_ORDER_THRESHOLD"
+  | "PRODUCT_SPECIFIC"
+  | "CATEGORY_SPECIFIC"
+  | "DEFAULT_RATE"
+  | "SHIPPING_DISABLED";
+
+export interface ShippingCalculationResult {
+  eligibleSubtotal: number;
+  shippingMethodName: string;
+  defaultShippingFee: number;
+  finalShippingCharge: number;
+  shippingDiscount: number;
+  isFreeShipping: boolean;
+  appliedRule: ShippingRuleApplied;
+  ruleName: string;
+  explanation: string;
+  estimatedDelivery?: string;
+  validationErrors?: string[];
+}
+
+export interface ShippingSnapshot {
+  shippingMethodName: string;
+  defaultShippingFee: number;
+  finalShippingCharge: number;
+  shippingDiscount: number;
+  isFreeShipping: boolean;
+  appliedRule: ShippingRuleApplied;
+  ruleName: string;
+  explanation: string;
+  currency: string;
+  calculatedAt: string;
+}
+
+export type ProductRatingSource = "AUTO" | "CUSTOM";
+
+export interface ProductRatingSettings {
+  displayRating: boolean;
+  ratingSource: ProductRatingSource;
+  manualRating: number | null;
+  manualReviewCount: number | null;
+}
+
+export type BannerObjectPosition = "center" | "top" | "bottom" | "left" | "right";
+
+export interface PageBannerConfig {
+  key?: string;
+  pageKey?: string;
+  pageName?: string;
+  pagePath?: string;
+  isEnabled?: boolean;
+  imageUrl?: string | null;
+  title: string;
+  label?: string | null;
+  description?: string | null;
+  objectPosition?: BannerObjectPosition;
+  overlayOpacity?: number; // 0 to 100, default 40
+  updatedAt?: string;
+}
+
+export type CategoryPageBannersMap = Record<string, PageBannerConfig>;
+
+

@@ -24,6 +24,8 @@ export interface ProductCardProps {
     secondaryImage?: string;
     avgRating?: number;
     reviewCount?: number;
+    displayRating?: boolean;
+    ratingSource?: string;
   };
 }
 
@@ -152,17 +154,21 @@ export function ProductCard({ product }: { product: any }) {
           </Link>
 
           {/* Rating */}
-          <div className="flex items-center space-x-1 mt-1">
-            <div className="flex items-center text-amber-500">
-              <Star className="w-3 h-3 fill-current" />
+          {product.displayRating !== false && (
+            <div className="flex items-center space-x-1 mt-1">
+              <div className="flex items-center text-amber-500">
+                <Star className="w-3 h-3 fill-current" />
+              </div>
+              <span className="text-[11px] font-semibold text-duskk-800">
+                {typeof product.avgRating === "number"
+                  ? product.avgRating.toFixed(1)
+                  : (product.avgRating || "4.9")}
+              </span>
+              <span className="text-[11px] text-duskk-400">
+                ({product.reviewCount !== undefined && product.reviewCount !== null ? product.reviewCount : 14})
+              </span>
             </div>
-            <span className="text-[11px] font-semibold text-duskk-800">
-              {product.avgRating || 4.9}
-            </span>
-            <span className="text-[11px] text-duskk-400">
-              ({product.reviewCount || 18})
-            </span>
-          </div>
+          )}
         </div>
 
         {/* Pricing & Mobile Add */}

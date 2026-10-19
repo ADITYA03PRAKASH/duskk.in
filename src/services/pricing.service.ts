@@ -1,9 +1,12 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CartItemInput, PriceBreakdown } from "@/types";
 import { getCustomComboSettings } from "./combo.service";
+import {
+  getShippingSettings,
+  calculateShipping,
+  ShippingCalculationItem,
+} from "./shipping.service";
 
-const FREE_SHIPPING_THRESHOLD = 999;
-const STANDARD_SHIPPING_CHARGE = 99;
 
 export async function validateAndCalculateCart(
   items: CartItemInput[],
@@ -585,7 +588,39 @@ export async function validateAndCalculateCart(
     }
   }
 
-  const shippingCharge = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING_CHARGE;
+  // Authoritative server-side shipping calculation
+  const shippingSettings = await getShippingSettings();
+
+  const shippingCalcItems: ShippingCalculationItem[] = [];
+  for (const item of validatedItems) {
+    if (item.productId) {
+      const prod = productMap.get(item.productId);
+      shippingCalcItems.push({
+        productId: item.productId,
+        categoryId: prod?.category_id || null,
+        quantity: item.quantity,
+      });
+    } else if (item.comboComponents && item.comboComponents.length > 0) {
+      for (const comp of item.comboComponents) {
+        const prod = productMap.get(comp.productId);
+        shippingCalcItems.push({
+          productId: comp.productId,
+          categoryId: prod?.category_id || null,
+          quantity: comp.quantity * item.quantity,
+        });
+      }
+    }
+  }
+
+  const shippingDetails = calculateShipping(
+    {
+      subtotal,
+      items: shippingCalcItems,
+    },
+    shippingSettings
+  );
+
+  const shippingCharge = shippingDetails.finalShippingCharge;
   const tax = Math.round((subtotal - discount) * 0.03); // 3% GST on jewelry
   const totalAmount = Math.max(0, subtotal - discount + shippingCharge);
 
@@ -593,6 +628,7 @@ export async function validateAndCalculateCart(
     subtotal,
     discount,
     shippingCharge,
+    shippingDetails,
     tax,
     totalAmount,
     couponApplied,

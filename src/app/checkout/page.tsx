@@ -88,10 +88,68 @@ function CheckoutContent() {
     "Other States / UTs",
   ];
 
+  // Dynamic shipping state from authoritative server calculation
+  const [shippingCharge, setShippingCharge] = useState<number>(subtotal >= 999 ? 0 : 99);
+  const [shippingMethodName, setShippingMethodName] = useState("Insured Express Shipping");
+  const [shippingExplanation, setShippingExplanation] = useState("");
+
   // Calculated totals
   const discount = couponApplied?.discountValue || 0;
-  const shippingCharge = subtotal >= 999 ? 0 : 99;
   const totalAmount = Math.max(0, subtotal - discount + shippingCharge);
+
+  // Synchronize dynamic shipping whenever cart items change
+  useEffect(() => {
+    if (items.length === 0) return;
+
+    let isMounted = true;
+    const payloadItems = items.map((i) => {
+      if (i.isCustomCombo) {
+        return {
+          isCustomCombo: true,
+          quantity: i.quantity,
+          customComponents: i.customComboComponents?.map((c) => ({
+            productId: c.productId,
+            variantId: c.variantId || null,
+            quantity: c.quantity,
+          })),
+        };
+      }
+      return {
+        productId: i.comboId ? undefined : i.productId,
+        comboId: i.comboId,
+        variantId: i.variantId,
+        quantity: i.quantity,
+      };
+    });
+
+    fetch("/api/checkout/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: payloadItems,
+        couponCode: couponApplied?.code || undefined,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data.success && data.data) {
+          const calc = data.data;
+          setShippingCharge(calc.shippingCharge);
+          if (calc.shippingDetails) {
+            setShippingMethodName(calc.shippingDetails.shippingMethodName || "Insured Express Shipping");
+            setShippingExplanation(calc.shippingDetails.explanation || "");
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Checkout shipping sync error:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [items, couponApplied]);
 
   const applyCoupon = async (codeToApply: string) => {
     setCouponError("");
@@ -125,9 +183,19 @@ function CheckoutContent() {
         }),
       });
       const data = await res.json();
-      if (res.ok && data.data?.couponApplied) {
-        setCouponApplied(data.data.couponApplied);
-        setCouponError("");
+      if (res.ok && data.data) {
+        if (data.data.couponApplied) {
+          setCouponApplied(data.data.couponApplied);
+          setCouponError("");
+        } else {
+          setCouponApplied(null);
+          setCouponError("Coupon code could not be applied.");
+        }
+        setShippingCharge(data.data.shippingCharge);
+        if (data.data.shippingDetails) {
+          setShippingMethodName(data.data.shippingDetails.shippingMethodName || "Insured Express Shipping");
+          setShippingExplanation(data.data.shippingDetails.explanation || "");
+        }
       } else {
         setCouponApplied(null);
         setCouponError(data.message || "Invalid coupon code.");
@@ -616,11 +684,18 @@ function CheckoutContent() {
                           <span>-{formatPrice(discount)}</span>
                         </div>
                       )}
-                      <div className="flex justify-between">
-                        <span>Insured Express Shipping:</span>
-                        <span className="text-duskk-900 font-medium">
-                          {shippingCharge === 0 ? <span className="text-emerald-700 font-bold uppercase">FREE</span> : formatPrice(shippingCharge)}
-                        </span>
+                      <div>
+                        <div className="flex justify-between">
+                          <span>{shippingMethodName}:</span>
+                          <span className="text-duskk-900 font-medium">
+                            {shippingCharge === 0 ? <span className="text-emerald-700 font-bold uppercase">FREE</span> : formatPrice(shippingCharge)}
+                          </span>
+                        </div>
+                        {shippingExplanation && (
+                          <p className="text-[10px] text-duskk-500 italic text-right mt-0.5">
+                            {shippingExplanation}
+                          </p>
+                        )}
                       </div>
                       <div className="flex justify-between text-duskk-500 text-[11px]">
                         <span>Taxes:</span>

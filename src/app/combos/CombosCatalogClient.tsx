@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { formatPrice } from "@/lib/utils";
-import { Combo, CustomComboSettings } from "@/types";
+import { formatPrice, normalizeImageUrl } from "@/lib/utils";
+import { Combo, CustomComboSettings, PageBannerConfig } from "@/types";
 import { useCart } from "@/context/CartContext";
 import {
   Gift,
@@ -21,9 +21,11 @@ import {
 export function CombosCatalogClient({
   initialCombos,
   builderSettings,
+  banner,
 }: {
   initialCombos: Combo[];
   builderSettings?: CustomComboSettings | null;
+  banner?: PageBannerConfig | null;
 }) {
   const { addComboToCart } = useCart();
   const [combos] = useState<Combo[]>(initialCombos);
@@ -71,41 +73,71 @@ export function CombosCatalogClient({
   return (
     <div>
       {/* Hero Header Banner */}
-      <section className="bg-duskk-900 text-white py-16 sm:py-20 px-4 sm:px-6 lg:px-8 border-b border-white/10 relative overflow-hidden">
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-duskk-gold/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="max-w-7xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center space-x-2 text-duskk-gold bg-duskk-800/80 px-3 py-1 rounded-full text-xs font-mono tracking-widest uppercase mb-4 border border-duskk-gold/20">
-            <Gift className="w-3.5 h-3.5" />
-            <span>Curated Gift Sets & Combos</span>
-          </div>
-          <h1 className="font-serif text-3xl sm:text-5xl text-white font-medium tracking-tight">
-            Perfect Pairings, Exceptional Value
-          </h1>
-          <p className="text-duskk-300 text-sm sm:text-base max-w-2xl mx-auto mt-3">
-            Handcrafted luxury jewelry pieces designed to dazzle together. Each gift set arrives packaged in our signature velvet-lined box with certificate of authenticity.
-          </p>
+      {(!banner || banner.isEnabled) && (
+        <section className="bg-duskk-900 text-white py-16 sm:py-20 px-4 sm:px-6 lg:px-8 border-b border-white/10 relative overflow-hidden">
+          {banner?.imageUrl ? (
+            <>
+              <div className="absolute inset-0 w-full h-full">
+                <img
+                  src={normalizeImageUrl(banner.imageUrl)}
+                  alt={banner.title || "Curated Gift Sets & Combos"}
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: banner.objectPosition || "center" }}
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              </div>
+              <div
+                className="absolute inset-0 bg-duskk-950 transition-opacity"
+                style={{ opacity: Math.max(0, Math.min(100, banner.overlayOpacity ?? 45)) / 100 }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/30 pointer-events-none" />
+            </>
+          ) : (
+            <div className="absolute top-0 right-1/4 w-96 h-96 bg-duskk-gold/5 rounded-full blur-3xl pointer-events-none" />
+          )}
 
-          {/* Value Highlights */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto mt-10 pt-8 border-t border-white/10 text-xs">
-            <div className="flex items-center justify-center space-x-2 text-duskk-200">
-              <Gift className="w-4 h-4 text-duskk-gold" />
-              <span>Free Luxury Gift Box</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 text-duskk-200">
-              <Sparkles className="w-4 h-4 text-duskk-gold" />
-              <span>Up to 45% Bundle Savings</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 text-duskk-200">
-              <ShieldCheck className="w-4 h-4 text-duskk-gold" />
-              <span>100% Certified Authentic</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 text-duskk-200">
-              <Truck className="w-4 h-4 text-duskk-gold" />
-              <span>Free Insured Delivery</span>
+          <div className="max-w-7xl mx-auto text-center relative z-10">
+            {(banner?.label || "Curated Gift Sets & Combos") && (
+              <div className="inline-flex items-center space-x-2 text-duskk-gold bg-duskk-800/80 px-3.5 py-1 rounded-full text-xs font-mono tracking-widest uppercase mb-4 border border-duskk-gold/20 shadow-sm backdrop-blur-sm">
+                <Gift className="w-3.5 h-3.5" />
+                <span>{banner?.label || "Curated Gift Sets & Combos"}</span>
+              </div>
+            )}
+
+            <h1 className="font-serif text-3xl sm:text-5xl text-white font-medium tracking-tight drop-shadow-sm">
+              {banner?.title || "Perfect Pairings, Exceptional Value"}
+            </h1>
+
+            {(banner?.description || "Handcrafted luxury jewelry pieces designed to dazzle together. Each gift set arrives packaged in our signature velvet-lined box with certificate of authenticity.") && (
+              <p className="text-duskk-200 text-sm sm:text-base max-w-2xl mx-auto mt-3 drop-shadow leading-relaxed font-light">
+                {banner?.description || "Handcrafted luxury jewelry pieces designed to dazzle together. Each gift set arrives packaged in our signature velvet-lined box with certificate of authenticity."}
+              </p>
+            )}
+
+            {/* Value Highlights */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto mt-10 pt-8 border-t border-white/10 text-xs">
+              <div className="flex items-center justify-center space-x-2 text-duskk-200">
+                <Gift className="w-4 h-4 text-duskk-gold" />
+                <span>Free Luxury Gift Box</span>
+              </div>
+              <div className="flex items-center justify-center space-x-2 text-duskk-200">
+                <Sparkles className="w-4 h-4 text-duskk-gold" />
+                <span>Up to 45% Bundle Savings</span>
+              </div>
+              <div className="flex items-center justify-center space-x-2 text-duskk-200">
+                <ShieldCheck className="w-4 h-4 text-duskk-gold" />
+                <span>100% Certified Authentic</span>
+              </div>
+              <div className="flex items-center justify-center space-x-2 text-duskk-200">
+                <Truck className="w-4 h-4 text-duskk-gold" />
+                <span>Free Insured Delivery</span>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

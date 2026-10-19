@@ -20,6 +20,8 @@ import {
   ShieldCheck,
   ChevronRight,
   Sparkles,
+  Truck,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -64,12 +66,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Products", href: isLocalAdmin ? "/admin/products" : "/products", slug: "products", icon: Package },
     { name: "Combos", href: isLocalAdmin ? "/admin/combos" : "/combos", slug: "combos", icon: Gift },
     { name: "Categories", href: isLocalAdmin ? "/admin/categories" : "/categories", slug: "categories", icon: Layers },
+    { name: "Page Banners", href: isLocalAdmin ? "/admin/banners" : "/banners", slug: "banners", icon: ImageIcon },
     { name: "Orders", href: isLocalAdmin ? "/admin/orders" : "/orders", slug: "orders", icon: ShoppingBag },
     { name: "Customers (CRM)", href: isLocalAdmin ? "/admin/customers" : "/customers", slug: "customers", icon: Users },
     { name: "Inventory", href: isLocalAdmin ? "/admin/inventory" : "/inventory", slug: "inventory", icon: Boxes },
     { name: "Homepage CMS", href: isLocalAdmin ? "/admin/cms" : "/cms", slug: "cms", icon: FileEdit },
     { name: "Customer Experiences", href: isLocalAdmin ? "/admin/customer-experiences" : "/customer-experiences", slug: "customer-experiences", icon: Sparkles },
     { name: "Coupons", href: isLocalAdmin ? "/admin/coupons" : "/coupons", slug: "coupons", icon: Tag },
+    { name: "Shipping & Delivery", href: isLocalAdmin ? "/admin/shipping" : "/shipping", slug: "shipping", icon: Truck },
   ];
 
   return (

@@ -18,6 +18,7 @@ import {
   EyeOff,
   Layers,
   MessageSquareHeart,
+  Image as ImageIcon,
 } from "lucide-react";
 
 const SOURCE_TYPES = [
@@ -344,6 +345,13 @@ export default function AdminCMSPage() {
             <Sparkles className="w-3.5 h-3.5" />
             <span>Customer Experiences</span>
           </button>
+          <Link
+            href="/admin/banners"
+            className="px-4 py-2 rounded-md text-xs font-semibold uppercase tracking-wider transition flex items-center space-x-1 text-duskk-700 hover:text-duskk-900"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Page Banners</span>
+          </Link>
         </div>
       </div>
 

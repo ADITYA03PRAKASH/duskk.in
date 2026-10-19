@@ -10,6 +10,7 @@ import {
   sendRefundEmail,
 } from "./email.service";
 import { saveCustomComboOrderSnapshot } from "./combo.service";
+import { createShippingSnapshot } from "./shipping.service";
 
 export async function initiateCheckoutOrder(
   payload: CheckoutPayload,
@@ -65,6 +66,21 @@ export async function initiateCheckoutOrder(
     phone: customerRecord.phone || customer.phone,
   };
 
+  const shippingSnapshot = calculation.shippingDetails
+    ? createShippingSnapshot(calculation.shippingDetails)
+    : {
+        shippingMethodName: "Insured Express Shipping",
+        defaultShippingFee: 99,
+        finalShippingCharge: calculation.shippingCharge,
+        shippingDiscount: calculation.shippingCharge === 0 ? 99 : 0,
+        isFreeShipping: calculation.shippingCharge === 0,
+        appliedRule: (calculation.shippingCharge === 0 ? "MIN_ORDER_THRESHOLD" : "DEFAULT_RATE") as any,
+        ruleName: calculation.shippingCharge === 0 ? "Free Shipping" : "Insured Express Shipping",
+        explanation: calculation.shippingCharge === 0 ? "Complimentary delivery applied" : "Standard insured shipping rate",
+        currency: "INR",
+        calculatedAt: new Date().toISOString(),
+      };
+
   const shippingAddressSnapshot = {
     full_name: customer.name,
     phone: customer.phone,
@@ -75,29 +91,45 @@ export async function initiateCheckoutOrder(
     state: shippingAddress.state.trim(),
     postal_code: shippingAddress.pincode.trim(),
     country: "India",
+    shipping_rule_snapshot: shippingSnapshot,
   };
 
   let orderId: string;
 
-  // 7. Insert Order record into Supabase
-  const { data: order, error: orderError } = await supabaseAdmin
+  const orderInsertPayload: any = {
+    order_number: orderNumber,
+    customer_id: customerRecord.id,
+    status: "PENDING_PAYMENT",
+    subtotal_amount: calculation.subtotal,
+    discount_amount: calculation.discount,
+    shipping_amount: calculation.shippingCharge,
+    tax_amount: calculation.tax,
+    grand_total: calculation.totalAmount,
+    coupon_code: calculation.couponApplied?.code || null,
+    customer_snapshot: customerSnapshot,
+    shipping_address_snapshot: shippingAddressSnapshot,
+    customer_notes: notes || null,
+  };
+
+  // 7. Insert Order record into Supabase (with fallback if shipping_snapshot column not yet present)
+  let { data: order, error: orderError } = await supabaseAdmin
     .from("orders")
     .insert({
-      order_number: orderNumber,
-      customer_id: customerRecord.id,
-      status: "PENDING_PAYMENT",
-      subtotal_amount: calculation.subtotal,
-      discount_amount: calculation.discount,
-      shipping_amount: calculation.shippingCharge,
-      tax_amount: calculation.tax,
-      grand_total: calculation.totalAmount,
-      coupon_code: calculation.couponApplied?.code || null,
-      customer_snapshot: customerSnapshot,
-      shipping_address_snapshot: shippingAddressSnapshot,
-      customer_notes: notes || null,
+      ...orderInsertPayload,
+      shipping_snapshot: shippingSnapshot,
     })
     .select()
     .single();
+
+  if (orderError && (orderError.message?.includes("shipping_snapshot") || orderError.code === "42703")) {
+    const retryResult = await supabaseAdmin
+      .from("orders")
+      .insert(orderInsertPayload)
+      .select()
+      .single();
+    order = retryResult.data;
+    orderError = retryResult.error;
+  }
 
   if (orderError || !order) {
     console.error("Order insertion error:", orderError);

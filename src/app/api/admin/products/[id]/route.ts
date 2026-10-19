@@ -3,13 +3,14 @@ import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeImageUrl, getProductPrimaryImage } from "@/lib/utils";
+import { resolveProductRating } from "@/services/catalog.service";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const admin = await getSessionAdmin();
+    const admin = await getSessionAdmin(req);
     if (!admin) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
@@ -41,8 +42,16 @@ export async function GET(
       };
     });
 
+    const ratingInfo = resolveProductRating(product);
+
     const formattedProduct = {
       ...product,
+      displayRating: ratingInfo.displayRating,
+      ratingSource: ratingInfo.ratingSource,
+      manualRating: product.manual_rating ?? product.specifications?.rating_settings?.manual_rating ?? null,
+      manualReviewCount: product.manual_review_count ?? product.specifications?.rating_settings?.manual_review_count ?? null,
+      avgRating: ratingInfo.avgRating,
+      reviewCount: ratingInfo.reviewCount,
       images: mappedImages,
       primaryImage: getProductPrimaryImage({ ...product, images: mappedImages }),
     };
@@ -58,7 +67,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const admin = await getSessionAdmin();
+    const admin = await getSessionAdmin(req);
     if (!admin) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
@@ -83,6 +92,10 @@ export async function PUT(
       newArrival,
       images,
       variants,
+      displayRating,
+      ratingSource,
+      manualRating,
+      manualReviewCount,
     } = body;
 
     const updates: Record<string, any> = {
@@ -95,6 +108,43 @@ export async function PUT(
     }
     if (shortDescription !== undefined) updates.short_description = shortDescription;
     if (description !== undefined) updates.description = description;
+
+    // Rating & Review Settings Validation
+    if (ratingSource !== undefined) {
+      const normSource = String(ratingSource).toUpperCase();
+      if (normSource !== "AUTO" && normSource !== "CUSTOM") {
+        return NextResponse.json({ success: false, message: "Rating source must be either 'AUTO' or 'CUSTOM'." }, { status: 400 });
+      }
+      updates.rating_source = normSource;
+    }
+
+    if (displayRating !== undefined) {
+      updates.display_rating = typeof displayRating === "boolean" ? displayRating : String(displayRating).toLowerCase() !== "false";
+    }
+
+    if (manualRating !== undefined) {
+      if (manualRating !== null && manualRating !== "") {
+        const n = Number(manualRating);
+        if (isNaN(n) || n < 0 || n > 5.0) {
+          return NextResponse.json({ success: false, message: "Product rating must be a valid number between 0.0 and 5.0." }, { status: 400 });
+        }
+        updates.manual_rating = Number(n.toFixed(1));
+      } else {
+        updates.manual_rating = null;
+      }
+    }
+
+    if (manualReviewCount !== undefined) {
+      if (manualReviewCount !== null && manualReviewCount !== "") {
+        const c = Number(manualReviewCount);
+        if (isNaN(c) || c < 0 || !Number.isInteger(c)) {
+          return NextResponse.json({ success: false, message: "Review count must be a non-negative whole integer." }, { status: 400 });
+        }
+        updates.manual_review_count = c;
+      } else {
+        updates.manual_review_count = null;
+      }
+    }
 
     // Validate/resolve category UUID if provided
     if (categoryId) {
@@ -164,8 +214,27 @@ export async function PUT(
     if (bestSeller !== undefined) updates.is_bestseller = bestSeller;
     if (newArrival !== undefined) updates.is_new_arrival = newArrival;
 
-    if (specifications) {
-      updates.specifications = specifications;
+    if (specifications !== undefined || updates.display_rating !== undefined || updates.rating_source !== undefined || updates.manual_rating !== undefined || updates.manual_review_count !== undefined) {
+      let baseSpecs = specifications;
+      if (!baseSpecs) {
+        const { data: currentProdSpecs } = await supabaseAdmin
+          .from("products")
+          .select("specifications")
+          .eq("id", params.id)
+          .maybeSingle();
+        baseSpecs = (currentProdSpecs?.specifications && typeof currentProdSpecs.specifications === "object")
+          ? { ...currentProdSpecs.specifications }
+          : {};
+      }
+      const existingRatingSettings = baseSpecs.rating_settings || {};
+      baseSpecs.rating_settings = {
+        ...existingRatingSettings,
+        display_rating: updates.display_rating !== undefined ? updates.display_rating : (existingRatingSettings.display_rating ?? true),
+        rating_source: updates.rating_source !== undefined ? updates.rating_source : (existingRatingSettings.rating_source || "AUTO"),
+        manual_rating: updates.manual_rating !== undefined ? updates.manual_rating : (existingRatingSettings.manual_rating ?? null),
+        manual_review_count: updates.manual_review_count !== undefined ? updates.manual_review_count : (existingRatingSettings.manual_review_count ?? null),
+      };
+      updates.specifications = baseSpecs;
     } else if (material || color) {
       updates.specifications = {
         material: material || "Demi-Fine Gold on 925 Sterling Silver",
@@ -270,7 +339,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const admin = await getSessionAdmin();
+    const admin = await getSessionAdmin(req);
     if (!admin) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }

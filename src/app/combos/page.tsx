@@ -4,6 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { getPublishedCombos, getCustomComboSettings } from "@/services/combo.service";
 import { getPromotionalCoupon } from "@/services/pricing.service";
+import { getPageBanner } from "@/services/banner.service";
 import { CombosCatalogClient } from "./CombosCatalogClient";
 
 export const metadata: Metadata = {
@@ -15,17 +16,22 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function CombosPage() {
-  const [combos, promoCoupon, customComboSettings] = await Promise.all([
+  const [combos, promoCoupon, customComboSettings, pageBanner] = await Promise.all([
     getPublishedCombos(),
     getPromotionalCoupon(),
     getCustomComboSettings(),
+    getPageBanner("combos"),
   ]);
 
   return (
     <>
       <Navbar initialPromoCoupon={promoCoupon} />
       <main className="min-h-screen bg-duskk-50">
-        <CombosCatalogClient initialCombos={combos} builderSettings={customComboSettings} />
+        <CombosCatalogClient
+          initialCombos={combos}
+          builderSettings={customComboSettings}
+          banner={pageBanner}
+        />
       </main>
       <Footer />
     </>

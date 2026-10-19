@@ -260,6 +260,107 @@ export const FALLBACK_PRODUCTS = [
   },
 ];
 
+export interface ProductRatingResolved {
+  displayRating: boolean;
+  avgRating: number;
+  reviewCount: number;
+  ratingSource: "AUTO" | "CUSTOM";
+  hasManualRating: boolean;
+}
+
+export function resolveProductRating(p: any, approvedReviews?: any[]): ProductRatingResolved {
+  const ratingSettings = p?.specifications?.rating_settings || {};
+
+  // 1. Determine displayRating (default: true)
+  let displayRating = true;
+  if (p?.display_rating !== undefined && p?.display_rating !== null) {
+    displayRating = Boolean(p.display_rating);
+  } else if (ratingSettings.display_rating !== undefined && ratingSettings.display_rating !== null) {
+    displayRating = Boolean(ratingSettings.display_rating);
+  }
+
+  // 2. Determine ratingSource ('AUTO' | 'CUSTOM', default: 'AUTO')
+  const rawSource = p?.rating_source || ratingSettings.rating_source || "AUTO";
+  const ratingSource: "AUTO" | "CUSTOM" = String(rawSource).toUpperCase() === "CUSTOM" ? "CUSTOM" : "AUTO";
+
+  // 3. Extract manual rating & review count
+  const manualRatingVal =
+    p?.manual_rating !== undefined && p?.manual_rating !== null
+      ? p.manual_rating
+      : ratingSettings.manual_rating !== undefined && ratingSettings.manual_rating !== null
+      ? ratingSettings.manual_rating
+      : null;
+
+  const manualCountVal =
+    p?.manual_review_count !== undefined && p?.manual_review_count !== null
+      ? p.manual_review_count
+      : ratingSettings.manual_review_count !== undefined && ratingSettings.manual_review_count !== null
+      ? ratingSettings.manual_review_count
+      : null;
+
+  // 4. Calculate genuine customer reviews
+  const reviewsList = approvedReviews || (p?.reviews || []).filter((r: any) => r.status === "approved");
+  const genuineCount = reviewsList.length;
+  const genuineAvg =
+    genuineCount > 0
+      ? Number((reviewsList.reduce((acc: number, r: any) => acc + Number(r.rating || 0), 0) / genuineCount).toFixed(1))
+      : 0;
+
+  const hasManualRating = manualRatingVal !== null && manualRatingVal !== "" && !isNaN(Number(manualRatingVal));
+
+  if (ratingSource === "CUSTOM") {
+    const customRating = hasManualRating
+      ? Math.min(5.0, Math.max(0.0, Number(Number(manualRatingVal).toFixed(1))))
+      : (genuineCount > 0 ? genuineAvg : 4.9);
+    const customCount =
+      manualCountVal !== null && manualCountVal !== "" && !isNaN(Number(manualCountVal))
+        ? Math.max(0, Math.round(Number(manualCountVal)))
+        : genuineCount;
+
+    return {
+      displayRating,
+      avgRating: customRating,
+      reviewCount: customCount,
+      ratingSource: "CUSTOM",
+      hasManualRating: true,
+    };
+  }
+
+  // AUTO: genuine reviews have first priority
+  if (genuineCount > 0) {
+    return {
+      displayRating,
+      avgRating: genuineAvg,
+      reviewCount: genuineCount,
+      ratingSource: "AUTO",
+      hasManualRating: false,
+    };
+  }
+
+  // If no genuine reviews exist, check if manual rating was configured
+  if (hasManualRating) {
+    return {
+      displayRating,
+      avgRating: Math.min(5.0, Math.max(0.0, Number(Number(manualRatingVal).toFixed(1)))),
+      reviewCount:
+        manualCountVal !== null && manualCountVal !== "" && !isNaN(Number(manualCountVal))
+          ? Math.max(0, Math.round(Number(manualCountVal)))
+          : 0,
+      ratingSource: "CUSTOM",
+      hasManualRating: true,
+    };
+  }
+
+  // Catalog fallback when no genuine reviews exist
+  return {
+    displayRating,
+    avgRating: 4.9,
+    reviewCount: 14,
+    ratingSource: "AUTO",
+    hasManualRating: false,
+  };
+}
+
 export async function getProducts(params: ProductQueryParams) {
   try {
     const {
@@ -292,6 +393,10 @@ export async function getProducts(params: ProductQueryParams) {
         is_featured,
         is_bestseller,
         is_new_arrival,
+        display_rating,
+        manual_rating,
+        manual_review_count,
+        rating_source,
         created_at,
         categories!products_category_id_fkey (
           id,
@@ -444,11 +549,7 @@ export async function getProducts(params: ProductQueryParams) {
         primaryImg;
 
       const approvedReviews = (p.reviews || []).filter((r: any) => r.status === "approved");
-      const totalRatings = approvedReviews.length;
-      const avgRating =
-        totalRatings > 0
-          ? Number((approvedReviews.reduce((acc: number, r: any) => acc + r.rating, 0) / totalRatings).toFixed(1))
-          : 4.9;
+      const ratingInfo = resolveProductRating(p, approvedReviews);
 
       const price = p.sale_price !== null ? Number(p.sale_price) : Number(p.base_price);
       const mrp = Number(p.base_price);
@@ -479,8 +580,11 @@ export async function getProducts(params: ProductQueryParams) {
         primaryImage: primaryImg,
         secondaryImage: secondaryImg,
         variants: p.product_variants || [],
-        avgRating,
-        reviewCount: totalRatings || 14,
+        displayRating: ratingInfo.displayRating,
+        ratingSource: ratingInfo.ratingSource,
+        avgRating: ratingInfo.avgRating,
+        reviewCount: ratingInfo.reviewCount,
+        hasManualRating: ratingInfo.hasManualRating,
       };
     });
 
@@ -536,6 +640,10 @@ export async function getProductBySlug(slug: string) {
           is_featured,
           is_bestseller,
           is_new_arrival,
+          display_rating,
+          manual_rating,
+          manual_review_count,
+          rating_source,
           meta_title,
           meta_description,
           created_at,
@@ -612,11 +720,7 @@ export async function getProductBySlug(slug: string) {
       "/placeholder.svg";
 
     const approvedReviews = (product.reviews || []).filter((r: any) => r.status === "approved");
-    const totalRatings = approvedReviews.length;
-    const avgRating =
-      totalRatings > 0
-        ? Number((approvedReviews.reduce((acc: number, r: any) => acc + r.rating, 0) / totalRatings).toFixed(1))
-        : 4.9;
+    const ratingInfo = resolveProductRating(product, approvedReviews);
 
     const price = product.sale_price !== null ? Number(product.sale_price) : Number(product.base_price);
     const mrp = Number(product.base_price);
@@ -647,8 +751,11 @@ export async function getProductBySlug(slug: string) {
       primaryImage: primaryImg,
       variants: (product.product_variants || []).filter((v: any) => v.is_active),
       reviews: approvedReviews,
-      avgRating,
-      reviewCount: totalRatings || 14,
+      displayRating: ratingInfo.displayRating,
+      ratingSource: ratingInfo.ratingSource,
+      avgRating: ratingInfo.avgRating,
+      reviewCount: ratingInfo.reviewCount,
+      hasManualRating: ratingInfo.hasManualRating,
       metaTitle: product.meta_title,
       metaDescription: product.meta_description,
     };

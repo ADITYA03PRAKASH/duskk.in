@@ -42,9 +42,37 @@ export function verifyToken<T>(token: string): T | null {
   }
 }
 
-export async function getSessionAdmin(): Promise<AdminPayload | null> {
-  const cookieStore = cookies();
-  const token = cookieStore.get(ADMIN_TOKEN_COOKIE)?.value;
+export async function getSessionAdmin(req?: any): Promise<AdminPayload | null> {
+  let token: string | undefined;
+
+  if (req) {
+    if (req.cookies && typeof req.cookies.get === "function") {
+      token = req.cookies.get(ADMIN_TOKEN_COOKIE)?.value;
+    }
+    if (!token && req.headers) {
+      const cookieHeader = typeof req.headers.get === "function" ? req.headers.get("cookie") : req.headers.cookie;
+      if (cookieHeader) {
+        const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_TOKEN_COOKIE}=([^;]*)`));
+        if (match) token = match[1];
+      }
+      if (!token) {
+        const authHeader = typeof req.headers.get === "function" ? req.headers.get("authorization") : req.headers.authorization;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          token = authHeader.substring(7);
+        }
+      }
+    }
+  }
+
+  if (!token) {
+    try {
+      const cookieStore = cookies();
+      token = cookieStore.get(ADMIN_TOKEN_COOKIE)?.value;
+    } catch {
+      // outside request async storage context
+    }
+  }
+
   if (!token) return null;
 
   const payload = verifyToken<AdminPayload>(token);
@@ -53,9 +81,31 @@ export async function getSessionAdmin(): Promise<AdminPayload | null> {
   return payload;
 }
 
-export async function getSessionUser(): Promise<UserPayload | null> {
-  const cookieStore = cookies();
-  const token = cookieStore.get(USER_TOKEN_COOKIE)?.value;
+export async function getSessionUser(req?: any): Promise<UserPayload | null> {
+  let token: string | undefined;
+
+  if (req) {
+    if (req.cookies && typeof req.cookies.get === "function") {
+      token = req.cookies.get(USER_TOKEN_COOKIE)?.value;
+    }
+    if (!token && req.headers) {
+      const cookieHeader = typeof req.headers.get === "function" ? req.headers.get("cookie") : req.headers.cookie;
+      if (cookieHeader) {
+        const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${USER_TOKEN_COOKIE}=([^;]*)`));
+        if (match) token = match[1];
+      }
+    }
+  }
+
+  if (!token) {
+    try {
+      const cookieStore = cookies();
+      token = cookieStore.get(USER_TOKEN_COOKIE)?.value;
+    } catch {
+      // outside request async storage context
+    }
+  }
+
   if (!token) return null;
 
   const payload = verifyToken<UserPayload>(token);

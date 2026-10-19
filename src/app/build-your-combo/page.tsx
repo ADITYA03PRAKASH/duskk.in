@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { getCustomComboSettings, getEligibleBuilderProducts } from "@/services/combo.service";
 import { getCategories } from "@/services/catalog.service";
 import { getPromotionalCoupon } from "@/services/pricing.service";
+import { getPageBanner } from "@/services/banner.service";
 import { BuildYourComboClient } from "./BuildYourComboClient";
 
 export const metadata: Metadata = {
@@ -16,10 +17,11 @@ export const metadata: Metadata = {
 export const revalidate = 60; // ISR cache 60 seconds
 
 export default async function BuildYourComboPage() {
-  const [settings, categories, promoCoupon] = await Promise.all([
+  const [settings, categories, promoCoupon, pageBanner] = await Promise.all([
     getCustomComboSettings(),
     getCategories(),
     getPromotionalCoupon(),
+    getPageBanner("build-your-combo"),
   ]);
 
   const products = settings.isEnabled ? await getEligibleBuilderProducts(settings) : [];
@@ -32,6 +34,7 @@ export default async function BuildYourComboPage() {
           initialSettings={settings}
           initialCategories={categories}
           initialProducts={products}
+          initialBanner={pageBanner}
         />
       </main>
       <Footer />

@@ -16,6 +16,9 @@ import {
   ExternalLink,
   Upload,
   Image as ImageIcon,
+  Star,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 export default function AdminProductsPage() {
@@ -43,6 +46,13 @@ export default function AdminProductsPage() {
   const [newArrival, setNewArrival] = useState(true);
   const [imageUrl, setImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Rating Controls State
+  const [displayRating, setDisplayRating] = useState(true);
+  const [ratingSource, setRatingSource] = useState<"AUTO" | "CUSTOM">("AUTO");
+  const [manualRating, setManualRating] = useState("");
+  const [manualReviewCount, setManualReviewCount] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -114,6 +124,13 @@ export default function AdminProductsPage() {
     setFeatured(false);
     setBestSeller(false);
     setNewArrival(true);
+
+    // Rating controls defaults
+    setDisplayRating(true);
+    setRatingSource("AUTO");
+    setManualRating("");
+    setManualReviewCount("");
+
     setErrorMsg("");
     setIsModalOpen(true);
   };
@@ -135,6 +152,16 @@ export default function AdminProductsPage() {
     setBestSeller(!!p.bestSeller);
     setNewArrival(!!p.newArrival);
     setImageUrl(getProductPrimaryImage(p, ""));
+
+    // Rating controls population
+    const dispRating = p.displayRating !== undefined ? Boolean(p.displayRating) : (p.display_rating !== undefined ? Boolean(p.display_rating) : true);
+    setDisplayRating(dispRating);
+    setRatingSource((p.ratingSource || p.rating_source || "AUTO").toUpperCase() === "CUSTOM" ? "CUSTOM" : "AUTO");
+    const manRating = p.manualRating !== null && p.manualRating !== undefined ? p.manualRating : (p.manual_rating !== null && p.manual_rating !== undefined ? p.manual_rating : "");
+    setManualRating(manRating !== "" ? String(manRating) : "");
+    const manCount = p.manualReviewCount !== null && p.manualReviewCount !== undefined ? p.manualReviewCount : (p.manual_review_count !== null && p.manual_review_count !== undefined ? p.manual_review_count : "");
+    setManualReviewCount(manCount !== "" ? String(manCount) : "");
+
     setErrorMsg("");
     setIsModalOpen(true);
   };
@@ -165,6 +192,26 @@ export default function AdminProductsPage() {
       return;
     }
 
+    // Rating validation
+    if (displayRating && ratingSource === "CUSTOM") {
+      if (manualRating !== "") {
+        const nr = Number(manualRating);
+        if (isNaN(nr) || nr < 0 || nr > 5.0) {
+          setErrorMsg("Custom rating must be a valid number between 0.0 and 5.0.");
+          setSaving(false);
+          return;
+        }
+      }
+      if (manualReviewCount !== "") {
+        const nc = Number(manualReviewCount);
+        if (isNaN(nc) || nc < 0 || !Number.isInteger(nc)) {
+          setErrorMsg("Custom review count must be a non-negative whole integer.");
+          setSaving(false);
+          return;
+        }
+      }
+    }
+
     const payload = {
       sku,
       name,
@@ -181,6 +228,10 @@ export default function AdminProductsPage() {
       bestSeller,
       newArrival,
       images: imageUrl ? [{ url: imageUrl, altText: name }] : [],
+      displayRating,
+      ratingSource,
+      manualRating: manualRating !== "" ? Number(Number(manualRating).toFixed(1)) : null,
+      manualReviewCount: manualReviewCount !== "" ? parseInt(manualReviewCount, 10) : null,
     };
 
     try {
@@ -282,6 +333,7 @@ export default function AdminProductsPage() {
                   <th className="py-3 px-4">Price / MRP</th>
                   <th className="py-3 px-4">Stock</th>
                   <th className="py-3 px-4">Badges</th>
+                  <th className="py-3 px-4">Rating Display</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -344,6 +396,36 @@ export default function AdminProductsPage() {
                           <span className="bg-duskk-gold text-duskk-900 text-[9px] uppercase px-1.5 py-0.5 font-bold">
                             New
                           </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4">
+                        {p.displayRating === false || p.display_rating === false ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-medium bg-duskk-100 text-duskk-500">
+                            <EyeOff className="w-3 h-3 text-duskk-400" />
+                            <span>Hidden</span>
+                          </span>
+                        ) : (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center space-x-1">
+                              <Star className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                              <span className="font-bold text-duskk-900 text-xs">
+                                {typeof p.avgRating === "number" ? p.avgRating.toFixed(1) : (p.avgRating || "4.9")}
+                              </span>
+                              <span className="text-duskk-400 text-[10px]">
+                                ({p.reviewCount ?? 14})
+                              </span>
+                            </div>
+                            <span
+                              className={`inline-block px-1.5 py-0.5 text-[9px] font-mono uppercase rounded ${
+                                (p.ratingSource || p.rating_source) === "CUSTOM"
+                                  ? "bg-purple-100 text-purple-800 font-semibold"
+                                  : "bg-duskk-100 text-duskk-600"
+                              }`}
+                            >
+                              {(p.ratingSource || p.rating_source) === "CUSTOM" ? "CMS Custom" : "Auto"}
+                            </span>
+                          </div>
                         )}
                       </td>
 
@@ -588,6 +670,158 @@ export default function AdminProductsPage() {
                   />
                   <span>New Arrival Badge</span>
                 </label>
+              </div>
+
+              {/* Rating & Review Display Controls Section */}
+              <div className="pt-4 border-t border-duskk-200 space-y-3 bg-duskk-50/70 p-4 rounded-lg border border-duskk-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-4 h-4 text-amber-500 fill-current" />
+                    <h4 className="font-semibold text-duskk-900 uppercase text-xs tracking-wider">
+                      Storefront Rating & Review Display
+                    </h4>
+                  </div>
+                  <label className="inline-flex items-center space-x-2 cursor-pointer bg-white px-3 py-1 rounded border border-duskk-200 shadow-sm">
+                    <input
+                      type="checkbox"
+                      checked={displayRating}
+                      onChange={(e) => setDisplayRating(e.target.checked)}
+                      className="rounded border-duskk-300 text-duskk-900 focus:ring-duskk-gold"
+                    />
+                    <span className="text-xs font-semibold text-duskk-800">
+                      {displayRating ? "Rating Display: Enabled" : "Rating Display: Disabled"}
+                    </span>
+                  </label>
+                </div>
+
+                <p className="text-[11px] text-duskk-600 leading-relaxed">
+                  Controls whether product ratings and review counts appear on customer-facing product cards, category pages, search results, and the product detail page.
+                </p>
+
+                {displayRating ? (
+                  <div className="space-y-3 pt-2">
+                    {/* Rating Source Selection */}
+                    <div>
+                      <label className="block font-semibold text-duskk-700 uppercase mb-1.5 text-[11px]">
+                        Rating Source
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label
+                          className={`flex items-start space-x-2.5 p-3 rounded-lg border cursor-pointer transition ${
+                            ratingSource === "AUTO"
+                              ? "bg-amber-50/60 border-amber-300 ring-1 ring-amber-300"
+                              : "bg-white border-duskk-200 hover:bg-duskk-50"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="ratingSource"
+                            value="AUTO"
+                            checked={ratingSource === "AUTO"}
+                            onChange={() => setRatingSource("AUTO")}
+                            className="mt-0.5 text-duskk-900 focus:ring-duskk-gold"
+                          />
+                          <div>
+                            <span className="font-semibold text-duskk-900 block text-xs">
+                              Automatic (Real Reviews)
+                            </span>
+                            <span className="text-[10px] text-duskk-500 block leading-tight mt-0.5">
+                              Calculates average rating dynamically from approved customer reviews (or catalog default if none submitted).
+                            </span>
+                          </div>
+                        </label>
+
+                        <label
+                          className={`flex items-start space-x-2.5 p-3 rounded-lg border cursor-pointer transition ${
+                            ratingSource === "CUSTOM"
+                              ? "bg-amber-50/60 border-amber-300 ring-1 ring-amber-300"
+                              : "bg-white border-duskk-200 hover:bg-duskk-50"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="ratingSource"
+                            value="CUSTOM"
+                            checked={ratingSource === "CUSTOM"}
+                            onChange={() => setRatingSource("CUSTOM")}
+                            className="mt-0.5 text-duskk-900 focus:ring-duskk-gold"
+                          />
+                          <div>
+                            <span className="font-semibold text-duskk-900 block text-xs">
+                              Administrator Managed (Custom)
+                            </span>
+                            <span className="text-[10px] text-duskk-500 block leading-tight mt-0.5">
+                              Explicit display rating and review count managed by CMS admin without overwriting genuine customer reviews.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Custom Rating & Review Count Inputs */}
+                    {ratingSource === "CUSTOM" && (
+                      <div className="p-3 bg-white border border-duskk-200 rounded-lg space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-duskk-700 uppercase text-[11px] mb-1">
+                              Product Rating (0.0 – 5.0) *
+                            </label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0.0"
+                              max="5.0"
+                              value={manualRating}
+                              onChange={(e) => setManualRating(e.target.value)}
+                              placeholder="e.g. 4.8"
+                              className="w-full px-3 py-2 border border-duskk-300 rounded text-xs focus:outline-none focus:border-duskk-gold"
+                            />
+                            <p className="text-[10px] text-duskk-400 mt-1">Decimal value from 0.0 to 5.0</p>
+                          </div>
+
+                          <div>
+                            <label className="block font-semibold text-duskk-700 uppercase text-[11px] mb-1">
+                              Review Count (≥ 0) *
+                            </label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="0"
+                              value={manualReviewCount}
+                              onChange={(e) => setManualReviewCount(e.target.value)}
+                              placeholder="e.g. 24"
+                              className="w-full px-3 py-2 border border-duskk-300 rounded text-xs focus:outline-none focus:border-duskk-gold"
+                            />
+                            <p className="text-[10px] text-duskk-400 mt-1">Non-negative whole integer</p>
+                          </div>
+                        </div>
+
+                        {/* Live Storefront Preview */}
+                        <div className="pt-2 border-t border-duskk-100 flex items-center justify-between">
+                          <span className="text-[11px] text-duskk-500 font-medium">Storefront Preview:</span>
+                          <div className="flex items-center space-x-1.5 bg-duskk-50 px-2.5 py-1 rounded border border-duskk-200">
+                            <div className="flex items-center text-amber-500">
+                              <Star className="w-3.5 h-3.5 fill-current" />
+                            </div>
+                            <span className="text-xs font-bold text-duskk-900">
+                              {manualRating ? Number(manualRating).toFixed(1) : "4.9"}
+                            </span>
+                            <span className="text-xs text-duskk-500">
+                              ({manualReviewCount !== "" ? manualReviewCount : "0"} Ratings)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-amber-50/60 border border-amber-200 rounded text-[11px] text-amber-800 flex items-center space-x-2">
+                    <EyeOff className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>
+                      Ratings and review counts will be hidden across all customer-facing product cards and product detail views.
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-duskk-200 flex justify-end space-x-2">

@@ -41,7 +41,7 @@ async function runEndToEndVerification() {
     {
       productId: testProduct.id,
       variantId: testVariant?.id || null,
-      quantity: 2,
+      quantity: 3,
     },
   ];
   const pricing = await validateAndCalculateCart(cartItems, "WELCOME10");

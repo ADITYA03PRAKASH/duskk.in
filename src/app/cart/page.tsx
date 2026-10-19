@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
@@ -15,9 +15,80 @@ export default function CartPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponStatus, setCouponStatus] = useState<string | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [shippingCharge, setShippingCharge] = useState<number>(subtotal >= 999 ? 0 : 99);
+  const [shippingMethodName, setShippingMethodName] = useState("Insured Express Shipping");
+  const [shippingExplanation, setShippingExplanation] = useState<string>("");
+  const [isValidating, setIsValidating] = useState(false);
 
-  const freeShippingThreshold = 999;
-  const shippingCharge = subtotal >= freeShippingThreshold ? 0 : 99;
+  // Synchronize cart with authoritative server shipping & discount calculation
+  useEffect(() => {
+    if (items.length === 0) {
+      setShippingCharge(0);
+      setShippingExplanation("");
+      setDiscountAmount(0);
+      return;
+    }
+
+    let isMounted = true;
+    setIsValidating(true);
+
+    const payloadItems = items.map((i) => {
+      if (i.isCustomCombo) {
+        return {
+          isCustomCombo: true,
+          quantity: i.quantity,
+          customComponents: i.customComboComponents?.map((c) => ({
+            productId: c.productId,
+            variantId: c.variantId || null,
+            quantity: c.quantity,
+          })),
+        };
+      }
+      return {
+        productId: i.comboId ? undefined : i.productId,
+        comboId: i.comboId,
+        variantId: i.variantId,
+        quantity: i.quantity,
+      };
+    });
+
+    fetch("/api/checkout/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: payloadItems,
+        couponCode: couponCode.trim() || undefined,
+      }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isMounted) return;
+        if (json.success && json.data) {
+          const calc = json.data;
+          setShippingCharge(calc.shippingCharge);
+          if (calc.shippingDetails) {
+            setShippingMethodName(calc.shippingDetails.shippingMethodName || "Insured Express Shipping");
+            setShippingExplanation(calc.shippingDetails.explanation || "");
+          }
+          if (calc.couponApplied) {
+            setDiscountAmount(calc.couponApplied.discountValue);
+          } else if (!couponCode) {
+            setDiscountAmount(0);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Cart validation error:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsValidating(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [items, couponCode]);
+
   const totalAmount = Math.max(0, subtotal - discountAmount + shippingCharge);
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
@@ -25,12 +96,32 @@ export default function CartPage() {
     if (!couponCode.trim()) return;
 
     try {
+      const payloadItems = items.map((i) => {
+        if (i.isCustomCombo) {
+          return {
+            isCustomCombo: true,
+            quantity: i.quantity,
+            customComponents: i.customComboComponents?.map((c) => ({
+              productId: c.productId,
+              variantId: c.variantId || null,
+              quantity: c.quantity,
+            })),
+          };
+        }
+        return {
+          productId: i.comboId ? undefined : i.productId,
+          comboId: i.comboId,
+          variantId: i.variantId,
+          quantity: i.quantity,
+        };
+      });
+
       const res = await fetch("/api/checkout/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-          couponCode: couponCode.trim(),
+          items: payloadItems,
+          couponCode: couponCode.trim().toUpperCase(),
         }),
       });
       const data = await res.json();
@@ -193,11 +284,22 @@ export default function CartPage() {
                       <span>-{formatPrice(discountAmount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span>Insured Express Shipping:</span>
-                    <span className="text-duskk-900 font-medium">
-                      {shippingCharge === 0 ? <span className="text-emerald-600 uppercase font-semibold">FREE</span> : formatPrice(shippingCharge)}
-                    </span>
+                  <div>
+                    <div className="flex justify-between">
+                      <span>{shippingMethodName}:</span>
+                      <span className="text-duskk-900 font-medium">
+                        {shippingCharge === 0 ? (
+                          <span className="text-emerald-600 uppercase font-semibold">FREE</span>
+                        ) : (
+                          formatPrice(shippingCharge)
+                        )}
+                      </span>
+                    </div>
+                    {shippingExplanation && (
+                      <p className="text-[10px] text-duskk-500 italic mt-0.5 text-right">
+                        {shippingExplanation}
+                      </p>
+                    )}
                   </div>
                   <div className="flex justify-between pt-3 border-t border-duskk-200 text-sm font-bold text-duskk-900">
                     <span>Total Amount:</span>

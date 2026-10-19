@@ -3,10 +3,11 @@ import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeImageUrl, getProductPrimaryImage } from "@/lib/utils";
+import { resolveProductRating } from "@/services/catalog.service";
 
 export async function GET(req: NextRequest) {
   try {
-    const admin = await getSessionAdmin();
+    const admin = await getSessionAdmin(req);
     if (!admin) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
@@ -32,6 +33,10 @@ export async function GET(req: NextRequest) {
           is_featured,
           is_bestseller,
           is_new_arrival,
+          display_rating,
+          manual_rating,
+          manual_review_count,
+          rating_source,
           category_id,
           subcategory_id,
           created_at,
@@ -71,6 +76,8 @@ export async function GET(req: NextRequest) {
           });
           const primaryImg = getProductPrimaryImage({ ...p, images: mappedImages });
 
+          const ratingInfo = resolveProductRating(p);
+
           return {
             id: p.id,
             name: p.title,
@@ -90,6 +97,12 @@ export async function GET(req: NextRequest) {
             primaryImage: primaryImg,
             variants: p.product_variants || [],
             stockQuantity: (p.product_variants || []).reduce((acc: number, v: any) => acc + (v.stock_quantity || 0), 0),
+            displayRating: ratingInfo.displayRating,
+            ratingSource: ratingInfo.ratingSource,
+            manualRating: p.manual_rating ?? p.specifications?.rating_settings?.manual_rating ?? null,
+            manualReviewCount: p.manual_review_count ?? p.specifications?.rating_settings?.manual_review_count ?? null,
+            avgRating: ratingInfo.avgRating,
+            reviewCount: ratingInfo.reviewCount,
           };
         });
 
@@ -107,7 +120,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = await getSessionAdmin();
+    const admin = await getSessionAdmin(req);
     if (!admin) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
@@ -133,6 +146,10 @@ export async function POST(req: NextRequest) {
       newArrival,
       images,
       variants,
+      displayRating,
+      ratingSource,
+      manualRating,
+      manualReviewCount,
     } = body;
 
     const prodTitle = title || name;
@@ -186,9 +203,56 @@ export async function POST(req: NextRequest) {
 
     const prodSku = sku || `DSK-${Date.now().toString().slice(-6)}`;
 
-    const specs = specifications || {
-      material: material || "Sterling Silver",
-      color: color || "Gold",
+    // Rating & Review Settings Validation
+    let parsedDisplayRating: boolean | undefined = undefined;
+    if (displayRating !== undefined) {
+      parsedDisplayRating = typeof displayRating === "boolean" ? displayRating : String(displayRating).toLowerCase() !== "false";
+    }
+
+    let parsedRatingSource: "AUTO" | "CUSTOM" | undefined = undefined;
+    if (ratingSource !== undefined) {
+      const normSource = String(ratingSource).toUpperCase();
+      if (normSource !== "AUTO" && normSource !== "CUSTOM") {
+        return NextResponse.json({ success: false, message: "Rating source must be either 'AUTO' or 'CUSTOM'." }, { status: 400 });
+      }
+      parsedRatingSource = normSource as "AUTO" | "CUSTOM";
+    }
+
+    let parsedManualRating: number | null | undefined = undefined;
+    if (manualRating !== undefined && manualRating !== null && manualRating !== "") {
+      const n = Number(manualRating);
+      if (isNaN(n) || n < 0 || n > 5.0) {
+        return NextResponse.json({ success: false, message: "Product rating must be a valid number between 0.0 and 5.0." }, { status: 400 });
+      }
+      parsedManualRating = Number(n.toFixed(1));
+    } else if (manualRating === null || manualRating === "") {
+      parsedManualRating = null;
+    }
+
+    let parsedManualReviewCount: number | null | undefined = undefined;
+    if (manualReviewCount !== undefined && manualReviewCount !== null && manualReviewCount !== "") {
+      const c = Number(manualReviewCount);
+      if (isNaN(c) || c < 0 || !Number.isInteger(c)) {
+        return NextResponse.json({ success: false, message: "Review count must be a non-negative whole integer." }, { status: 400 });
+      }
+      parsedManualReviewCount = c;
+    } else if (manualReviewCount === null || manualReviewCount === "") {
+      parsedManualReviewCount = null;
+    }
+
+    const ratingSettings = {
+      display_rating: parsedDisplayRating !== undefined ? parsedDisplayRating : true,
+      rating_source: parsedRatingSource || "AUTO",
+      manual_rating: parsedManualRating !== undefined ? parsedManualRating : null,
+      manual_review_count: parsedManualReviewCount !== undefined ? parsedManualReviewCount : null,
+    };
+
+    const specs = {
+      ...(specifications || {
+        material: material || "Sterling Silver",
+        color: color || "Gold",
+      }),
+      rating_settings: ratingSettings,
     };
 
     const numMrp = mrp !== undefined && mrp !== null && mrp !== "" ? Number(mrp) : undefined;
@@ -248,6 +312,10 @@ export async function POST(req: NextRequest) {
           is_featured: !!featured,
           is_bestseller: !!bestSeller,
           is_new_arrival: !!newArrival,
+          display_rating: parsedDisplayRating !== undefined ? parsedDisplayRating : true,
+          rating_source: parsedRatingSource || "AUTO",
+          manual_rating: parsedManualRating !== undefined ? parsedManualRating : null,
+          manual_review_count: parsedManualReviewCount !== undefined ? parsedManualReviewCount : null,
         })
         .select()
         .maybeSingle();
