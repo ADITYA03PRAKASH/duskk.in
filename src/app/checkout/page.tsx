@@ -8,7 +8,7 @@ import { Footer } from "@/components/layout/Footer";
 import { useCart } from "@/context/CartContext";
 import { RazorpayPaymentModal } from "@/components/cart/RazorpayModal";
 import { openRazorpayModal } from "@/lib/razorpay-client";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, normalizeImageUrl } from "@/lib/utils";
 import {
   ShieldCheck,
   Lock,
@@ -546,9 +546,12 @@ function CheckoutContent() {
                           <div key={itemKey} className="py-2.5 flex items-center justify-between text-xs">
                             <div className="flex items-center space-x-3 min-w-0 pr-2">
                               <img
-                                src={i.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=150&q=80"}
+                                src={normalizeImageUrl(i.image)}
                                 alt={i.name}
                                 className="w-10 h-10 object-cover rounded bg-duskk-50 border border-duskk-100 flex-shrink-0"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "/placeholder.svg";
+                                }}
                               />
                               <div className="min-w-0">
                                 {i.isCustomCombo ? (

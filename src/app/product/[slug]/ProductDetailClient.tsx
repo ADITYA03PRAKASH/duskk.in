@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, normalizeImageUrl, getProductPrimaryImage } from "@/lib/utils";
 import {
   Star,
   ShoppingBag,
@@ -31,15 +31,16 @@ export function ProductDetailClient({ product }: { product: any }) {
   const [openAccordion, setOpenAccordion] = useState<string | null>("description");
   const [isAdded, setIsAdded] = useState(false);
 
+  const rawImages = product.images || product.product_images;
   const images =
-    product.images && product.images.length > 0
-      ? product.images.map((img: any) => ({
-          url: typeof img === "string" ? img : (img.image_url || img.url || product.primaryImage || "/placeholder.jpg"),
+    rawImages && rawImages.length > 0
+      ? rawImages.map((img: any) => ({
+          url: normalizeImageUrl(img, getProductPrimaryImage(product, "/placeholder.svg")),
           altText: typeof img === "string" ? product.name : (img.alt_text || img.altText || product.name),
         }))
       : [
           {
-            url: product.primaryImage || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1000&q=80",
+            url: getProductPrimaryImage(product, "/placeholder.svg"),
             altText: product.name,
           },
         ];
@@ -128,6 +129,9 @@ export function ProductDetailClient({ product }: { product: any }) {
                   src={img.url}
                   alt={img.altText || product.name}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/placeholder.svg";
+                  }}
                 />
               </button>
             ))}
@@ -140,6 +144,9 @@ export function ProductDetailClient({ product }: { product: any }) {
             src={currentImage.url}
             alt={currentImage.altText || product.name}
             className="w-full h-full object-cover object-center"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "/placeholder.svg";
+            }}
           />
 
           {/* Badges */}

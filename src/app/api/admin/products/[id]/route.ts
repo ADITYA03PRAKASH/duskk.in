@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { normalizeImageUrl, getProductPrimaryImage } from "@/lib/utils";
 
 export async function GET(
   req: NextRequest,
@@ -27,7 +28,26 @@ export async function GET(
       return NextResponse.json({ success: false, message: "Product not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: product });
+    const rawImages = (product.product_images || []).sort(
+      (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)
+    );
+    const mappedImages = rawImages.map((img: any) => {
+      const normalized = normalizeImageUrl(img.image_url);
+      return {
+        ...img,
+        url: normalized,
+        image_url: normalized,
+        raw_url: img.image_url,
+      };
+    });
+
+    const formattedProduct = {
+      ...product,
+      images: mappedImages,
+      primaryImage: getProductPrimaryImage({ ...product, images: mappedImages }),
+    };
+
+    return NextResponse.json({ success: true, data: formattedProduct });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

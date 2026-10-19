@@ -82,12 +82,14 @@ export async function POST(req: NextRequest) {
 
     const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${rawExt}`;
     const result = await uploadFileToStorage(bucket as any, filename, buffer, mimeType);
+    const proxyUrl = `/api/storage/file/${bucket}/${result.path}`;
 
     return NextResponse.json({
       success: true,
       data: {
         path: result.path,
-        url: result.publicUrl,
+        url: proxyUrl,
+        publicUrl: result.publicUrl,
       },
     });
   } catch (error: any) {

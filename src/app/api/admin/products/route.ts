@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getSessionAdmin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { normalizeImageUrl, getProductPrimaryImage } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -55,25 +56,42 @@ export async function GET(req: NextRequest) {
       const { data: products, error } = await query;
 
       if (!error && products) {
-        const formatted = products.map((p: any) => ({
-          id: p.id,
-          name: p.title,
-          title: p.title,
-          slug: p.slug,
-          sku: p.sku,
-          price: Number(p.sale_price !== null ? p.sale_price : p.base_price),
-          mrp: Number(p.base_price),
-          status: p.status,
-          active: p.status === "active",
-          featured: p.is_featured,
-          bestSeller: p.is_bestseller,
-          newArrival: p.is_new_arrival,
-          categoryId: p.category_id,
-          categoryName: p.categories?.name,
-          images: p.product_images || [],
-          variants: p.product_variants || [],
-          stockQuantity: (p.product_variants || []).reduce((acc: number, v: any) => acc + (v.stock_quantity || 0), 0),
-        }));
+        const formatted = products.map((p: any) => {
+          const rawImages = (p.product_images || []).sort(
+            (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)
+          );
+          const mappedImages = rawImages.map((img: any) => {
+            const normalized = normalizeImageUrl(img.image_url);
+            return {
+              ...img,
+              url: normalized,
+              image_url: normalized,
+              raw_url: img.image_url,
+            };
+          });
+          const primaryImg = getProductPrimaryImage({ ...p, images: mappedImages });
+
+          return {
+            id: p.id,
+            name: p.title,
+            title: p.title,
+            slug: p.slug,
+            sku: p.sku,
+            price: Number(p.sale_price !== null ? p.sale_price : p.base_price),
+            mrp: Number(p.base_price),
+            status: p.status,
+            active: p.status === "active",
+            featured: p.is_featured,
+            bestSeller: p.is_bestseller,
+            newArrival: p.is_new_arrival,
+            categoryId: p.category_id,
+            categoryName: p.categories?.name,
+            images: mappedImages,
+            primaryImage: primaryImg,
+            variants: p.product_variants || [],
+            stockQuantity: (p.product_variants || []).reduce((acc: number, v: any) => acc + (v.stock_quantity || 0), 0),
+          };
+        });
 
         return NextResponse.json({ success: true, data: formatted });
       }
@@ -266,14 +284,22 @@ export async function POST(req: NextRequest) {
 
       // Insert Images
       if (images && Array.isArray(images) && images.length > 0) {
-        const imgInserts = images.map((img: any, idx: number) => ({
-          product_id: product.id,
-          image_url: typeof img === "string" ? img : img.url,
-          alt_text: product.title,
-          display_order: idx,
-          is_primary: idx === 0,
-        }));
-        await supabaseAdmin.from("product_images").insert(imgInserts);
+        const imgInserts = images
+          .map((img: any, idx: number) => {
+            const rawUrl = typeof img === "string" ? img : (img?.url || img?.image_url);
+            if (!rawUrl || typeof rawUrl !== "string" || !rawUrl.trim()) return null;
+            return {
+              product_id: product.id,
+              image_url: rawUrl.trim(),
+              alt_text: product.title,
+              display_order: idx,
+              is_primary: idx === 0,
+            };
+          })
+          .filter(Boolean);
+        if (imgInserts.length > 0) {
+          await supabaseAdmin.from("product_images").insert(imgInserts as any[]);
+        }
       }
 
       // Revalidate Storefront Caches

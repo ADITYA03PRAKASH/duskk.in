@@ -4,7 +4,7 @@ import React, { useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useCart } from "@/context/CartContext";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, normalizeImageUrl } from "@/lib/utils";
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck } from "lucide-react";
 
 export function CartDrawer() {
@@ -115,9 +115,12 @@ export function CartDrawer() {
                     className="flex space-x-4 py-3 border-b border-duskk-100 last:border-0"
                   >
                     <img
-                      src={item.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=300&q=80"}
+                      src={normalizeImageUrl(item.image)}
                       alt={item.name}
                       className="w-20 h-20 object-cover rounded bg-duskk-50 flex-shrink-0 border border-duskk-100"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/placeholder.svg";
+                      }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">

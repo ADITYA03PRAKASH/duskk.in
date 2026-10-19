@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { normalizeImageUrl } from "@/lib/utils";
 
 export interface ProductQueryParams {
   category?: string | null;
@@ -422,11 +423,25 @@ export async function getProducts(params: ProductQueryParams) {
     }
 
     const formattedProducts = (data || []).map((p: any) => {
-      const images = (p.product_images || []).sort(
-        (a: any, b: any) => a.display_order - b.display_order
+      const rawImages = (p.product_images || []).sort(
+        (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)
       );
-      const primaryImg = images.find((i: any) => i.is_primary)?.image_url || images[0]?.image_url || "/placeholder.jpg";
-      const secondaryImg = images[1]?.image_url || images[0]?.image_url || "/placeholder.jpg";
+      const mappedImages = rawImages.map((img: any) => {
+        const norm = normalizeImageUrl(img.image_url);
+        return {
+          ...img,
+          url: norm,
+          image_url: norm,
+          raw_url: img.image_url,
+        };
+      });
+      const primaryImg =
+        mappedImages.find((i: any) => i.is_primary)?.url ||
+        mappedImages[0]?.url ||
+        "/placeholder.svg";
+      const secondaryImg =
+        mappedImages[1]?.url ||
+        primaryImg;
 
       const approvedReviews = (p.reviews || []).filter((r: any) => r.status === "approved");
       const totalRatings = approvedReviews.length;
@@ -460,7 +475,7 @@ export async function getProducts(params: ProductQueryParams) {
         bestSeller: p.is_bestseller,
         newArrival: p.is_new_arrival,
         category: p.categories,
-        images,
+        images: mappedImages,
         primaryImage: primaryImg,
         secondaryImage: secondaryImg,
         variants: p.product_variants || [],
@@ -579,10 +594,22 @@ export async function getProductBySlug(slug: string) {
       return null;
     }
 
-    const images = (product.product_images || []).sort(
-      (a: any, b: any) => a.display_order - b.display_order
+    const rawImages = (product.product_images || []).sort(
+      (a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)
     );
-    const primaryImg = images.find((i: any) => i.is_primary)?.image_url || images[0]?.image_url || "/placeholder.jpg";
+    const mappedImages = rawImages.map((img: any) => {
+      const norm = normalizeImageUrl(img.image_url);
+      return {
+        ...img,
+        url: norm,
+        image_url: norm,
+        raw_url: img.image_url,
+      };
+    });
+    const primaryImg =
+      mappedImages.find((i: any) => i.is_primary)?.url ||
+      mappedImages[0]?.url ||
+      "/placeholder.svg";
 
     const approvedReviews = (product.reviews || []).filter((r: any) => r.status === "approved");
     const totalRatings = approvedReviews.length;
@@ -616,7 +643,7 @@ export async function getProductBySlug(slug: string) {
       bestSeller: product.is_bestseller,
       newArrival: product.is_new_arrival,
       category: product.categories,
-      images,
+      images: mappedImages,
       primaryImage: primaryImg,
       variants: (product.product_variants || []).filter((v: any) => v.is_active),
       reviews: approvedReviews,

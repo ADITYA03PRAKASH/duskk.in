@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { formatPrice, formatDate, ORDER_STATUS_LABELS } from "@/lib/utils";
+import { formatPrice, formatDate, ORDER_STATUS_LABELS, normalizeImageUrl } from "@/lib/utils";
 import {
   Compass,
   CheckCircle2,
@@ -332,9 +332,12 @@ function OrderTrackContent() {
                   <div key={item.id} className="py-2.5 flex justify-between items-center text-xs">
                     <div className="flex items-center space-x-3">
                       <img
-                        src={item.productImage || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=150&q=80"}
+                        src={normalizeImageUrl(item.productImage)}
                         alt={item.productName}
                         className="w-10 h-10 object-cover rounded bg-duskk-50 border border-duskk-100"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/placeholder.svg";
+                        }}
                       />
                       <div>
                         <p className="font-semibold text-duskk-900">{item.productName}</p>

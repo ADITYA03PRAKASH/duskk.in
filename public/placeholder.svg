@@ -1,0 +1,10 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="400" fill="#FAF8F5"/>
+  <rect x="20" y="20" width="360" height="360" stroke="#C5A880" stroke-opacity="0.3" stroke-width="1"/>
+  <path d="M200 130L235 185H165L200 130Z" stroke="#C5A880" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M165 185L200 240L235 185" stroke="#C5A880" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M165 185H235" stroke="#C5A880" stroke-width="2"/>
+  <path d="M200 130V240" stroke="#C5A880" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <text x="200" y="275" font-family="serif" font-size="14" fill="#1F1F1F" letter-spacing="3" text-anchor="middle" font-weight="500">DUSKK</text>
+  <text x="200" y="295" font-family="sans-serif" font-size="9" fill="#7A6B58" letter-spacing="2" text-anchor="middle">ATELIER PIECE</text>
+</svg>

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, getProductPrimaryImage, normalizeImageUrl } from "@/lib/utils";
 import { Star, ShoppingBag, Check } from "lucide-react";
 
 export interface ProductCardProps {
@@ -32,15 +32,11 @@ export function ProductCard({ product }: { product: any }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
 
-  const primaryImg =
-    product.primaryImage ||
-    product.images?.find((i: any) => i.isPrimary)?.url ||
-    product.images?.[0]?.url ||
-    "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=600&q=80";
+  const primaryImg = getProductPrimaryImage(product, "/placeholder.svg");
 
   const secondaryImg =
-    product.secondaryImage ||
-    product.images?.[1]?.url ||
+    normalizeImageUrl(product.secondaryImage, "") ||
+    normalizeImageUrl(product.images?.[1], "") ||
     primaryImg;
 
   const isOutOfStock = product.stockQuantity <= 0;
@@ -78,6 +74,9 @@ export function ProductCard({ product }: { product: any }) {
             alt={product.name}
             className="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
             loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "/placeholder.svg";
+            }}
           />
         </Link>
 

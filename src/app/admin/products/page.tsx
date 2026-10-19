@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, getProductPrimaryImage, normalizeImageUrl } from "@/lib/utils";
 import {
   Package,
   Plus,
@@ -134,7 +134,7 @@ export default function AdminProductsPage() {
     setFeatured(!!p.featured);
     setBestSeller(!!p.bestSeller);
     setNewArrival(!!p.newArrival);
-    setImageUrl(p.images?.[0]?.url || p.images?.[0]?.image_url || "");
+    setImageUrl(getProductPrimaryImage(p, ""));
     setErrorMsg("");
     setIsModalOpen(true);
   };
@@ -287,7 +287,7 @@ export default function AdminProductsPage() {
               </thead>
               <tbody className="divide-y divide-duskk-100">
                 {products.map((p) => {
-                  const img = p.images?.[0]?.url || "/placeholder.jpg";
+                  const img = getProductPrimaryImage(p);
                   return (
                     <tr key={p.id} className="hover:bg-duskk-50/50">
                       <td className="py-3 px-4 flex items-center space-x-3">
@@ -295,6 +295,9 @@ export default function AdminProductsPage() {
                           src={img}
                           alt={p.name}
                           className="w-12 h-12 object-cover rounded bg-duskk-50 border border-duskk-100 flex-shrink-0"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/placeholder.svg";
+                          }}
                         />
                         <div>
                           <p className="font-semibold text-duskk-900 line-clamp-1">{p.name}</p>
@@ -497,7 +500,14 @@ export default function AdminProductsPage() {
                   <div className="flex items-center gap-3">
                     {imageUrl ? (
                       <div className="w-14 h-14 rounded border border-duskk-200 overflow-hidden bg-duskk-50 flex-shrink-0 relative group">
-                        <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                        <img
+                          src={normalizeImageUrl(imageUrl)}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/placeholder.svg";
+                          }}
+                        />
                       </div>
                     ) : (
                       <div className="w-14 h-14 rounded border border-dashed border-duskk-300 bg-duskk-50 flex items-center justify-center text-duskk-400 flex-shrink-0">

@@ -19,7 +19,19 @@ const nextConfig = {
         protocol: "https",
         hostname: "i.pinimg.com",
       },
+      {
+        protocol: "https",
+        hostname: "ramajewels.com",
+      },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/placeholder.jpg",
+        destination: "/placeholder.svg",
+      },
+    ];
   },
 };
 
