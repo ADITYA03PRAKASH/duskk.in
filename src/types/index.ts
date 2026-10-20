@@ -191,12 +191,14 @@ export interface PriceBreakdown {
 }
 
 export interface OrderTrackResult {
+  id?: string;
   orderNumber: string;
   orderStatus: string;
   paymentStatus?: string;
   createdAt: string;
   customerName: string;
   customerEmail: string;
+  customerPhone?: string;
   shippingAddress: {
     addressLine1: string;
     addressLine2?: string | null;
@@ -207,6 +209,8 @@ export interface OrderTrackResult {
   };
   items: {
     id?: string;
+    productId?: string | null;
+    variantId?: string | null;
     productName: string;
     variantTitle?: string | null;
     productSku: string;
@@ -227,10 +231,99 @@ export interface OrderTrackResult {
   trackingUrl?: string | null;
   estimatedDelivery?: string | null;
   timeline: {
+    from_status?: string | null;
     status: string;
     timestamp: string;
     note?: string | null;
+    changed_by?: string | null;
   }[];
+  cancellations?: OrderCancellation[];
+  exchanges?: OrderExchange[];
+  refunds?: OrderRefund[];
+}
+
+export type CancellationStatus =
+  | "REQUESTED"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED";
+
+export interface OrderCancellation {
+  id: string;
+  orderId?: string;
+  customerId?: string | null;
+  reason: string;
+  details?: string | null;
+  status: CancellationStatus;
+  adminNotes?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+export type ExchangeStatus =
+  | "REQUESTED"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "PICKUP_SCHEDULED"
+  | "INSPECTION_PENDING"
+  | "REPLACEMENT_DISPATCHED"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export interface OrderExchange {
+  id: string;
+  orderId?: string;
+  orderItemId?: string | null;
+  customerId?: string | null;
+  reason: string;
+  details?: string | null;
+  evidenceUrls?: string[];
+  replacementProductId?: string | null;
+  replacementVariantId?: string | null;
+  status: ExchangeStatus;
+  pickupCourier?: string | null;
+  pickupTrackingNumber?: string | null;
+  pickupScheduledDate?: string | null;
+  replacementCourier?: string | null;
+  replacementTrackingNumber?: string | null;
+  adminNotes?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+export type RefundStatus =
+  | "REQUESTED"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED"
+  | "REJECTED";
+
+export interface OrderRefund {
+  id: string;
+  orderId?: string;
+  paymentId?: string | null;
+  cancellationId?: string | null;
+  exchangeId?: string | null;
+  amount: number;
+  currency: string;
+  reason: string;
+  status: RefundStatus;
+  razorpayRefundId?: string | null;
+  razorpayPaymentId?: string | null;
+  errorCode?: string | null;
+  errorDescription?: string | null;
+  adminNotes?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  processedAt?: string | null;
+  idempotencyKey?: string | null;
+  createdAt: string;
 }
 
 export type OrderStatus =

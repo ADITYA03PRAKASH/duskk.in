@@ -77,6 +77,18 @@ export async function POST(req: NextRequest) {
     } else if (eventType === "refund.processed") {
       const refundEntity = payload.refund?.entity;
       const paymentId = refundEntity?.payment_id;
+      const refundId = refundEntity?.id;
+
+      if (refundId) {
+        await supabaseAdmin
+          .from("order_refunds")
+          .update({
+            status: "COMPLETED",
+            processed_at: new Date().toISOString(),
+          })
+          .eq("razorpay_refund_id", refundId);
+      }
+
       if (paymentId) {
         const { data: payment } = await supabaseAdmin
           .from("payments")
@@ -85,8 +97,26 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (payment) {
-          await updateOrderStatus(payment.order_id, "REFUNDED", "razorpay_webhook", "Refund processed via Razorpay");
+          await supabaseAdmin
+            .from("payments")
+            .update({ status: "refunded" })
+            .eq("razorpay_payment_id", paymentId);
+
+          await updateOrderStatus(payment.order_id, "REFUNDED", "razorpay_webhook", "Refund confirmed via Razorpay webhook");
         }
+      }
+    } else if (eventType === "refund.failed") {
+      const refundEntity = payload.refund?.entity;
+      const refundId = refundEntity?.id;
+
+      if (refundId) {
+        await supabaseAdmin
+          .from("order_refunds")
+          .update({
+            status: "FAILED",
+            reason: `Webhook reported refund failure: ${refundEntity?.error_description || "Unknown failure"}`,
+          })
+          .eq("razorpay_refund_id", refundId);
       }
     }
 

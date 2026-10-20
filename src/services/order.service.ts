@@ -9,6 +9,10 @@ import {
   sendOrderConfirmationEmailDetailed,
   sendOrderStatusUpdateEmail,
   sendRefundEmail,
+  sendCancellationRequestReceivedEmail,
+  sendCancellationDecisionEmail,
+  sendExchangeRequestReceivedEmail,
+  sendExchangeDecisionEmail,
 } from "./email.service";
 import { saveCustomComboOrderSnapshot } from "./combo.service";
 import { createShippingSnapshot } from "./shipping.service";
@@ -395,292 +399,141 @@ export async function updateOrderStatus(
     estimatedDelivery?: string;
   }
 ) {
-  try {
-    const { data: currentOrder, error: fetchErr } = await supabaseAdmin
-      .from("orders")
-      .select("id, status, order_number, grand_total, customer_snapshot, payments (id, razorpay_payment_id, status)")
-      .eq("id", orderId)
-      .single();
+  // 1. Fetch current order snapshot for customer email and prior status
+  const { data: currentOrder, error: fetchErr } = await supabaseAdmin
+    .from("orders")
+    .select("id, status, order_number, grand_total, customer_snapshot, payments (id, razorpay_payment_id, status)")
+    .eq("id", orderId)
+    .single();
 
-    if (fetchErr || !currentOrder) {
-      return { success: true, message: "Order updated" };
-    }
-
-    const oldStatus = currentOrder.status;
-
-    // Duplicate prevention: only send notifications and log transition when status actually changes
-    if (oldStatus === newStatus) {
-      return { success: true, message: "Order status is already up to date" };
-    }
-
-    let fullComment = comment || `Status updated from ${oldStatus} to ${newStatus}`;
-    if (trackingInfo?.courierName || trackingInfo?.trackingNumber) {
-      const trackingParts = [];
-      if (trackingInfo.courierName) trackingParts.push(`Courier: ${trackingInfo.courierName}`);
-      if (trackingInfo.trackingNumber) trackingParts.push(`AWB: ${trackingInfo.trackingNumber}`);
-      if (trackingInfo.trackingUrl) trackingParts.push(`URL: ${trackingInfo.trackingUrl}`);
-      if (trackingInfo.estimatedDelivery) trackingParts.push(`Est. Delivery: ${trackingInfo.estimatedDelivery}`);
-      fullComment = `${fullComment} | [TRACKING] ${trackingParts.join(" | ")}`;
-    }
-
-    if (newStatus === "CANCELLED") {
-      try {
-        await supabaseAdmin.rpc("cancel_order_and_release_inventory", {
-          p_order_id: orderId,
-          p_reason: fullComment,
-        });
-      } catch (rpcErr) {
-        console.warn("Cancel RPC fallback:", rpcErr);
-      }
-    } else {
-      try {
-        await supabaseAdmin
-          .from("orders")
-          .update({ status: newStatus, updated_at: new Date().toISOString() })
-          .eq("id", orderId);
-
-        await supabaseAdmin.from("order_status_history").insert({
-          order_id: orderId,
-          from_status: oldStatus,
-          to_status: newStatus,
-          changed_by: changedBy,
-          comment: fullComment,
-        });
-      } catch (updateErr) {
-        console.warn("Order status update DB fallback:", updateErr);
-      }
-    }
-
-    const customerSnapshot = currentOrder.customer_snapshot as any;
-    const customerName = `${customerSnapshot?.first_name || ""} ${customerSnapshot?.last_name || ""}`.trim() || "Customer";
-    const customerEmail = customerSnapshot?.email;
-
-    if (customerEmail) {
-      if (newStatus === "REFUNDED") {
-        const paymentsList = currentOrder.payments as any[];
-        const refundRef = paymentsList?.[0]?.razorpay_payment_id || comment || undefined;
-        sendRefundEmail({
-          orderNumber: currentOrder.order_number,
-          customerName,
-          customerEmail,
-          refundAmount: Number(currentOrder.grand_total || 0),
-          refundReference: refundRef,
-          refundStatus: "COMPLETED",
-        }).catch((err) => console.warn("Refund email dispatch error (non-fatal):", err?.message));
-      } else if (["SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(newStatus)) {
-        sendOrderStatusUpdateEmail({
-          orderNumber: currentOrder.order_number,
-          customerName,
-          customerEmail,
-          status: newStatus,
-          amount: Number(currentOrder.grand_total || 0),
-          reason: comment,
-          trackingInfo,
-        }).catch((err) => console.warn("Status update email dispatch error (non-fatal):", err?.message));
-      }
-    }
-
-    return { success: true };
-  } catch (err: any) {
-    console.warn("updateOrderStatus caught error:", err?.message || "Unknown error");
-    return { success: true };
+  if (fetchErr || !currentOrder) {
+    throw new Error(`Order ${orderId} not found`);
   }
+
+  const oldStatus = currentOrder.status;
+
+  // 2. Call atomic PostgreSQL stored procedure (runs with SECURITY DEFINER)
+  const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("admin_update_order_status", {
+    p_order_id: orderId,
+    p_status: newStatus,
+    p_changed_by: changedBy,
+    p_comment: comment || null,
+    p_courier_name: trackingInfo?.courierName || null,
+    p_tracking_number: trackingInfo?.trackingNumber || null,
+    p_tracking_url: trackingInfo?.trackingUrl || null,
+    p_estimated_delivery: trackingInfo?.estimatedDelivery || null,
+  });
+
+  if (rpcError) {
+    console.error("admin_update_order_status RPC failed:", rpcError);
+    throw new Error(`Failed to update order status: ${rpcError.message}`);
+  }
+
+  // 3. Queue asynchronous customer email notification (does not block database update)
+  const customerSnapshot = currentOrder.customer_snapshot as any;
+  const customerName = `${customerSnapshot?.first_name || ""} ${customerSnapshot?.last_name || ""}`.trim() || "Valued Customer";
+  const customerEmail = customerSnapshot?.email;
+
+  if (customerEmail && oldStatus !== newStatus) {
+    if (newStatus === "REFUNDED") {
+      const paymentsList = currentOrder.payments as any[];
+      const refundRef = paymentsList?.[0]?.razorpay_payment_id || comment || undefined;
+      sendRefundEmail({
+        orderId: currentOrder.id,
+        orderNumber: currentOrder.order_number,
+        customerName,
+        customerEmail,
+        refundAmount: Number(currentOrder.grand_total || 0),
+        refundReference: refundRef,
+        refundStatus: "COMPLETED",
+      }).catch((err) => console.warn("Refund email dispatch error (non-fatal):", err?.message));
+    } else {
+      sendOrderStatusUpdateEmail({
+        orderId: currentOrder.id,
+        orderNumber: currentOrder.order_number,
+        customerName,
+        customerEmail,
+        status: newStatus,
+        amount: Number(currentOrder.grand_total || 0),
+        reason: comment,
+        trackingInfo,
+      }).catch((err) => console.warn("Status update email dispatch error (non-fatal):", err?.message));
+    }
+  }
+
+  return { success: true, data: rpcResult };
 }
 
 export async function trackCustomerOrder(orderNumber: string, email: string): Promise<OrderTrackResult> {
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedOrderNumber = orderNumber.trim().toUpperCase();
 
-  let orderData: any = null;
-  let timeline: any[] = [];
+  // Call authoritative atomic procedure get_customer_order_details
+  const { data: orderData, error } = await supabaseAdmin.rpc("get_customer_order_details", {
+    p_order_number: normalizedOrderNumber,
+    p_email: normalizedEmail,
+  });
+
+  if (error || !orderData || !orderData.id) {
+    throw new Error("No order found matching this Order Number and Email Address. Please verify your details.");
+  }
+
+  // Parse courier tracking from timeline entries with [TRACKING] tags
   let courierName: string | null = null;
   let trackingNumber: string | null = null;
   let trackingUrl: string | null = null;
   let estimatedDelivery: string | null = null;
 
-  try {
-    const { data, error } = await supabaseAdmin.rpc("get_guest_order", {
-      p_order_number: normalizedOrderNumber,
-      p_email: normalizedEmail,
-    });
+  const timelineEntries = orderData.timeline || [];
+  for (const entry of timelineEntries) {
+    if (entry.note && entry.note.includes("[TRACKING]")) {
+      const trackSection = entry.note.split("[TRACKING]")[1] || "";
+      const matchCourier = trackSection.match(/Courier:\s*([^|]+)/i);
+      const matchAwb = trackSection.match(/AWB:\s*([^|]+)/i);
+      const matchUrl = trackSection.match(/URL:\s*([^|]+)/i);
+      const matchEst = trackSection.match(/Est\. Delivery:\s*([^|]+)/i);
 
-    if (!error && data && data.length > 0) {
-      orderData = data[0];
-    }
-  } catch (rpcErr) {
-    console.warn("trackCustomerOrder RPC fallback:", rpcErr);
-  }
-
-  // If RPC failed or wasn't available, search orders table directly
-  if (!orderData) {
-    try {
-      const { data: dbOrder } = await supabaseAdmin
-        .from("orders")
-        .select(`
-          id,
-          order_number,
-          status,
-          subtotal_amount,
-          discount_amount,
-          shipping_amount,
-          tax_amount,
-          grand_total,
-          created_at,
-          customer_snapshot,
-          shipping_address_snapshot,
-          order_items (*)
-        `)
-        .eq("order_number", normalizedOrderNumber)
-        .single();
-
-      if (dbOrder) {
-        const custSnap = dbOrder.customer_snapshot as any;
-        if (custSnap?.email?.toLowerCase() === normalizedEmail) {
-          orderData = {
-            id: dbOrder.id,
-            order_number: dbOrder.order_number,
-            status: dbOrder.status,
-            subtotal_amount: dbOrder.subtotal_amount,
-            discount_amount: dbOrder.discount_amount,
-            shipping_amount: dbOrder.shipping_amount,
-            tax_amount: dbOrder.tax_amount,
-            grand_total: dbOrder.grand_total,
-            created_at: dbOrder.created_at,
-            customer_name: `${custSnap?.first_name || ""} ${custSnap?.last_name || ""}`.trim() || "Customer",
-            items: dbOrder.order_items,
-          };
-        }
-      }
-    } catch (directErr) {
-      console.warn("Direct order query fallback:", directErr);
+      if (matchCourier) courierName = matchCourier[1].trim();
+      if (matchAwb) trackingNumber = matchAwb[1].trim();
+      if (matchUrl) trackingUrl = matchUrl[1].trim();
+      if (matchEst) estimatedDelivery = matchEst[1].trim();
     }
   }
 
-  if (orderData?.id) {
-    try {
-      const { data: history } = await supabaseAdmin
-        .from("order_status_history")
-        .select("to_status, created_at, comment")
-        .eq("order_id", orderData.id)
-        .order("created_at", { ascending: true });
-
-      if (history) {
-        timeline = history.map((h) => {
-          if (h.comment && h.comment.includes("[TRACKING]")) {
-            const trackSection = h.comment.split("[TRACKING]")[1] || "";
-            const matchCourier = trackSection.match(/Courier:\s*([^|]+)/i);
-            const matchAwb = trackSection.match(/AWB:\s*([^|]+)/i);
-            const matchUrl = trackSection.match(/URL:\s*([^|]+)/i);
-            const matchEst = trackSection.match(/Est\. Delivery:\s*([^|]+)/i);
-
-            if (matchCourier) courierName = matchCourier[1].trim();
-            if (matchAwb) trackingNumber = matchAwb[1].trim();
-            if (matchUrl) trackingUrl = matchUrl[1].trim();
-            if (matchEst) estimatedDelivery = matchEst[1].trim();
-          }
-
-          return {
-            status: h.to_status,
-            timestamp: h.created_at,
-            note: h.comment,
-          };
-        });
-      }
-    } catch (histErr) {
-      console.warn("Order history fetch fallback:", histErr);
-    }
-  }
-
-  // If still not found in live DB (or offline/demo testing), provide rich mock result for DUSK orders ONLY when mock fallback is explicitly enabled in development
-  if (!orderData) {
-    const isMockAllowed = process.env.NODE_ENV === "development" && process.env.ENABLE_MOCK_FALLBACK === "true";
-    if (isMockAllowed && (normalizedOrderNumber.startsWith("DUSK-") || normalizedOrderNumber.startsWith("ORD-"))) {
-      return {
-        orderNumber: normalizedOrderNumber,
-        orderStatus: "SHIPPED",
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-        customerName: "Valued Customer",
-        customerEmail: normalizedEmail,
-        shippingAddress: {
-          addressLine1: "Plot No. 152-153, Sidhatri Enclave, Bhagwati Garden, Uttam Nagar",
-          city: "New Delhi",
-          state: "Delhi",
-          pincode: "110059",
-        },
-        courierName: "Blue Dart Express",
-        trackingNumber: "BD918273645IN",
-        trackingUrl: "https://www.bluedart.com/tracking?awb=BD918273645IN",
-        estimatedDelivery: new Date(Date.now() + 172800000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-        items: [
-          {
-            productName: "Aurora Solitaire Pavé Ring",
-            variantTitle: "Size 6",
-            productSku: "DSK-RN-001",
-            productImage: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=800&q=85",
-            price: 2499,
-            quantity: 1,
-            totalPrice: 2499,
-          },
-        ],
-        financials: {
-          subtotal: 2499,
-          discount: 0,
-          shippingCharge: 0,
-          tax: 75,
-          totalAmount: 2574,
-        },
-        timeline: [
-          {
-            status: "PAID",
-            timestamp: new Date(Date.now() - 86400000).toISOString(),
-            note: "Payment authorized via Razorpay UPI",
-          },
-          {
-            status: "CONFIRMED",
-            timestamp: new Date(Date.now() - 80000000).toISOString(),
-            note: "Order verified and quality check queued",
-          },
-          {
-            status: "PROCESSING",
-            timestamp: new Date(Date.now() - 50000000).toISOString(),
-            note: "Packed in signature velvet box and sealed",
-          },
-          {
-            status: "SHIPPED",
-            timestamp: new Date(Date.now() - 20000000).toISOString(),
-            note: "Dispatched via Blue Dart Express (AWB: BD918273645IN)",
-          },
-        ],
-      };
-    }
-
-    throw new Error("No order found matching this Order Number and Email Address. Please verify your details.");
-  }
+  const custSnap = orderData.customer_snapshot || {};
+  const addrSnap = orderData.shipping_address_snapshot || {};
 
   return {
+    id: orderData.id,
     orderNumber: orderData.order_number,
     orderStatus: orderData.status,
     createdAt: orderData.created_at,
-    customerName: orderData.customer_name || "Valued Customer",
-    customerEmail: normalizedEmail,
+    customerName: `${custSnap.first_name || ""} ${custSnap.last_name || ""}`.trim() || addrSnap.full_name || "Valued Customer",
+    customerEmail: custSnap.email || normalizedEmail,
+    customerPhone: custSnap.phone || addrSnap.phone || "",
     shippingAddress: {
-      addressLine1: "Verified Shipping Destination",
-      city: "",
-      state: "",
-      pincode: "",
+      addressLine1: addrSnap.address_line1 || "",
+      addressLine2: addrSnap.address_line2 || null,
+      city: addrSnap.city || "",
+      state: addrSnap.state || "",
+      pincode: addrSnap.postal_code || "",
+      landmark: addrSnap.landmark || null,
     },
     courierName: courierName || (["SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED"].includes(orderData.status) ? "Blue Dart Express" : null),
-    trackingNumber: trackingNumber || (["SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED"].includes(orderData.status) ? `AWB-${orderData.order_number.replace(/[^0-9]/g, "")}` : null),
+    trackingNumber: trackingNumber || null,
     trackingUrl: trackingUrl || null,
     estimatedDelivery: estimatedDelivery || null,
     items: ((orderData.items as any[]) || []).map((i) => ({
-      productName: i.product_title || i.title || "Jewellery Piece",
+      id: i.id,
+      productId: i.product_id,
+      variantId: i.variant_id,
+      productName: i.product_title || "Jewellery Piece",
       variantTitle: i.variant_title,
       productSku: i.sku,
       productImage: i.image_url,
       price: Number(i.unit_sale_price || i.unit_price || 0),
       quantity: i.quantity || 1,
-      totalPrice: Number(i.total_price || (i.unit_price * i.quantity) || 0),
+      totalPrice: Number(i.total_price || 0),
     })),
     financials: {
       subtotal: Number(orderData.subtotal_amount || 0),
@@ -689,12 +542,268 @@ export async function trackCustomerOrder(orderNumber: string, email: string): Pr
       tax: Number(orderData.tax_amount || 0),
       totalAmount: Number(orderData.grand_total || 0),
     },
-    timeline: timeline.length > 0 ? timeline : [
+    timeline: timelineEntries.length > 0 ? timelineEntries : [
       {
         status: orderData.status,
         timestamp: orderData.created_at,
         note: "Order confirmed in system",
       }
     ],
+    cancellations: orderData.cancellations || [],
+    exchanges: orderData.exchanges || [],
+    refunds: orderData.refunds || [],
+  };
+}
+
+/**
+ * Customer submits an eligible cancellation request.
+ */
+export async function requestOrderCancellation(
+  orderNumber: string,
+  email: string,
+  reason: string,
+  details?: string
+) {
+  if (!orderNumber || !email || !reason) {
+    throw new Error("Order number, email, and cancellation reason are required.");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("customer_request_order_cancellation", {
+    p_order_number: orderNumber.trim().toUpperCase(),
+    p_email: email.trim().toLowerCase(),
+    p_reason: reason.trim(),
+    p_details: details?.trim() || null,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Failed to submit cancellation request");
+  }
+
+  // Queue acknowledgment email
+  sendCancellationRequestReceivedEmail({
+    orderId: data.order_id,
+    orderNumber: data.order_number,
+    customerName: "Valued Customer",
+    customerEmail: email.trim().toLowerCase(),
+    reason: reason.trim(),
+    details: details?.trim() || null,
+  }).catch((emailErr) => console.warn("Cancellation request email error:", emailErr?.message));
+
+  return data;
+}
+
+/**
+ * Admin reviews and approves or rejects a customer cancellation request.
+ */
+export async function processOrderCancellation(
+  cancellationId: string,
+  decision: "APPROVE" | "REJECT",
+  adminEmail: string,
+  notes?: string
+) {
+  if (!cancellationId || !decision) {
+    throw new Error("Cancellation ID and decision are required.");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("admin_process_cancellation", {
+    p_cancellation_id: cancellationId,
+    p_decision: decision,
+    p_admin_email: adminEmail,
+    p_notes: notes?.trim() || null,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Failed to process cancellation request");
+  }
+
+  // Fetch order customer details for email
+  const { data: order } = await supabaseAdmin
+    .from("orders")
+    .select("order_number, grand_total, customer_snapshot")
+    .eq("id", data.order_id)
+    .single();
+
+  if (order) {
+    const cust = order.customer_snapshot as any;
+    const customerEmail = cust?.email;
+    const customerName = `${cust?.first_name || ""} ${cust?.last_name || ""}`.trim() || "Valued Customer";
+
+    if (customerEmail) {
+      sendCancellationDecisionEmail({
+        orderId: data.order_id,
+        orderNumber: order.order_number,
+        customerName,
+        customerEmail,
+        reason: "Customer cancellation request",
+        decision: decision === "APPROVE" ? "APPROVED" : "REJECTED",
+        adminNotes: notes || null,
+        refundAmount: Number(order.grand_total || 0),
+      }).catch((emailErr) => console.warn("Cancellation decision email error:", emailErr?.message));
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Customer submits an eligible product exchange request.
+ */
+export async function requestOrderExchange(
+  orderNumber: string,
+  email: string,
+  orderItemId: string,
+  reason: string,
+  details?: string,
+  evidenceUrls: string[] = []
+) {
+  if (!orderNumber || !email || !orderItemId || !reason) {
+    throw new Error("Order number, email, item ID, and exchange reason are required.");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("customer_request_order_exchange", {
+    p_order_number: orderNumber.trim().toUpperCase(),
+    p_email: email.trim().toLowerCase(),
+    p_order_item_id: orderItemId,
+    p_reason: reason.trim(),
+    p_details: details?.trim() || null,
+    p_evidence_urls: evidenceUrls,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Failed to submit exchange request");
+  }
+
+  // Fetch item title for email
+  const { data: item } = await supabaseAdmin
+    .from("order_items")
+    .select("product_title")
+    .eq("id", orderItemId)
+    .single();
+
+  sendExchangeRequestReceivedEmail({
+    orderId: data.order_id,
+    orderNumber: orderNumber.trim().toUpperCase(),
+    customerName: "Valued Customer",
+    customerEmail: email.trim().toLowerCase(),
+    productTitle: item?.product_title || "Jewellery Item",
+    reason: reason.trim(),
+    details: details?.trim() || null,
+    status: "REQUESTED",
+  }).catch((emailErr) => console.warn("Exchange request email error:", emailErr?.message));
+
+  return data;
+}
+
+/**
+ * Admin reviews and approves, updates, or rejects an exchange request.
+ */
+export async function processOrderExchange(
+  exchangeId: string,
+  decision: "APPROVE" | "REJECT" | "PICKUP_SCHEDULED" | "INSPECTION_PENDING" | "REPLACEMENT_DISPATCHED" | "COMPLETED",
+  adminEmail: string,
+  options?: {
+    notes?: string;
+    replacementVariantId?: string;
+    pickupCourier?: string;
+    pickupAwb?: string;
+    replacementCourier?: string;
+    replacementAwb?: string;
+  }
+) {
+  if (!exchangeId || !decision) {
+    throw new Error("Exchange ID and decision are required.");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("admin_process_exchange", {
+    p_exchange_id: exchangeId,
+    p_decision: decision,
+    p_admin_email: adminEmail,
+    p_notes: options?.notes?.trim() || null,
+    p_replacement_variant_id: options?.replacementVariantId || null,
+    p_pickup_courier: options?.pickupCourier?.trim() || null,
+    p_pickup_awb: options?.pickupAwb?.trim() || null,
+    p_replacement_courier: options?.replacementCourier?.trim() || null,
+    p_replacement_awb: options?.replacementAwb?.trim() || null,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Failed to process exchange request");
+  }
+
+  // Fetch exchange and order info for email notification
+  const { data: exchange } = await supabaseAdmin
+    .from("order_exchanges")
+    .select(`
+      id,
+      order_id,
+      reason,
+      details,
+      status,
+      pickup_courier,
+      pickup_tracking_number,
+      replacement_courier,
+      replacement_tracking_number,
+      admin_notes,
+      order_items (product_title),
+      orders (order_number, customer_snapshot)
+    `)
+    .eq("id", exchangeId)
+    .single();
+
+  if (exchange) {
+    const ord = exchange.orders as any;
+    const cust = ord?.customer_snapshot as any;
+    const customerEmail = cust?.email;
+    const customerName = `${cust?.first_name || ""} ${cust?.last_name || ""}`.trim() || "Valued Customer";
+    const itemTitle = (exchange.order_items as any)?.product_title || "Jewellery Piece";
+
+    if (customerEmail) {
+      sendExchangeDecisionEmail({
+        orderId: exchange.order_id,
+        orderNumber: ord?.order_number || "DUSKK",
+        customerName,
+        customerEmail,
+        productTitle: itemTitle,
+        reason: exchange.reason,
+        details: exchange.details,
+        status: (decision === "APPROVE" ? "APPROVED" : decision === "REJECT" ? "REJECTED" : decision) as any,
+        pickupCourier: exchange.pickup_courier,
+        pickupAwb: exchange.pickup_tracking_number,
+        replacementCourier: exchange.replacement_courier,
+        replacementAwb: exchange.replacement_tracking_number,
+        adminNotes: options?.notes || exchange.admin_notes,
+      }).catch((emailErr) => console.warn("Exchange decision email error:", emailErr?.message));
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Fetches all requests (cancellations, exchanges, refunds) for an order.
+ */
+export async function fetchOrderRequests(orderId: string) {
+  const [cancellationsRes, exchangesRes, refundsRes] = await Promise.all([
+    supabaseAdmin
+      .from("order_cancellations")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("order_exchanges")
+      .select("*, order_items (product_title, sku, image_url)")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("order_refunds")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  return {
+    cancellations: cancellationsRes.data || [],
+    exchanges: exchangesRes.data || [],
+    refunds: refundsRes.data || [],
   };
 }

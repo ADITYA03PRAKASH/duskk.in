@@ -69,10 +69,6 @@ export function ComboOffersSection({
                       </span>
                     </span>
                   )}
-                  <span className="flex items-center space-x-1.5 text-duskk-champagne">
-                    <Check className="w-3.5 h-3.5 text-duskk-gold" />
-                    <span>Free Luxury Velvet Gift Box</span>
-                  </span>
                 </div>
               </div>
 

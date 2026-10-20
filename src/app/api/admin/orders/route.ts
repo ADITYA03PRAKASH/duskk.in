@@ -33,7 +33,10 @@ export async function GET(req: NextRequest) {
         created_at,
         order_items (*),
         order_status_history (*),
-        payments (*)
+        payments (*),
+        order_cancellations (*),
+        order_exchanges (*),
+        order_refunds (*)
       `)
       .order("created_at", { ascending: false });
 
@@ -103,6 +106,8 @@ export async function GET(req: NextRequest) {
         estimatedDelivery: estimatedDelivery || "",
         items: (o.order_items || []).map((i: any) => ({
           id: i.id,
+          productId: i.product_id,
+          variantId: i.variant_id,
           productName: i.product_title,
           variantTitle: i.variant_title,
           productSku: i.sku,
@@ -117,6 +122,9 @@ export async function GET(req: NextRequest) {
           note: h.comment,
           changedBy: h.changed_by,
         })),
+        cancellations: o.order_cancellations || [],
+        exchanges: o.order_exchanges || [],
+        refunds: o.order_refunds || [],
         createdAt: o.created_at,
       };
     });

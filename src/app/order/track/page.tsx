@@ -19,6 +19,11 @@ import {
   ExternalLink,
   Copy,
   Check,
+  RotateCcw,
+  XCircle,
+  X,
+  CreditCard,
+  ArrowRight,
 } from "lucide-react";
 
 const TRACKING_STEPS = [
@@ -27,6 +32,23 @@ const TRACKING_STEPS = [
   { key: "SHIPPED", label: "Shipped", icon: Truck },
   { key: "OUT_FOR_DELIVERY", label: "Out for Delivery", icon: Truck },
   { key: "DELIVERED", label: "Delivered", icon: Home },
+];
+
+const CANCELLATION_REASONS = [
+  "Ordered by mistake / duplicate order",
+  "Incorrect shipping address",
+  "Changed my mind / No longer needed",
+  "Found alternative jewellery piece",
+  "Delivery timeframe too long",
+  "Other reason",
+];
+
+const EXCHANGE_REASONS = [
+  "Damaged or defective jewellery received",
+  "Incorrect ring/bracelet size or variant",
+  "Different item received than ordered",
+  "Finishing or polishing issue",
+  "Other exchange reason",
 ];
 
 function OrderTrackContent() {
@@ -40,6 +62,24 @@ function OrderTrackContent() {
   const [error, setError] = useState("");
   const [orderData, setOrderData] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Cancellation Modal State
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState(CANCELLATION_REASONS[0]);
+  const [cancelDetails, setCancelDetails] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelSuccessMsg, setCancelSuccessMsg] = useState("");
+
+  // Exchange Modal State
+  const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [exchangeItemId, setExchangeItemId] = useState("");
+  const [exchangeReason, setExchangeReason] = useState(EXCHANGE_REASONS[0]);
+  const [exchangeDetails, setExchangeDetails] = useState("");
+  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [exchangeSubmitting, setExchangeSubmitting] = useState(false);
+  const [exchangeError, setExchangeError] = useState("");
+  const [exchangeSuccessMsg, setExchangeSuccessMsg] = useState("");
 
   const handleCopyAwb = (awb: string) => {
     navigator.clipboard.writeText(awb);
@@ -66,6 +106,9 @@ function OrderTrackContent() {
       const data = await res.json();
       if (res.ok && data.success) {
         setOrderData(data.data);
+        if (data.data.items?.length > 0 && !exchangeItemId) {
+          setExchangeItemId(data.data.items[0].id);
+        }
       } else {
         setOrderData(null);
         setError(
@@ -90,6 +133,84 @@ function OrderTrackContent() {
     fetchOrderTracking(orderNumber, email);
   };
 
+  const handleCancelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!orderData) return;
+
+    setCancelSubmitting(true);
+    setCancelError("");
+    setCancelSuccessMsg("");
+
+    try {
+      const res = await fetch("/api/order/cancellation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNumber: orderData.orderNumber,
+          email: orderData.customerEmail,
+          reason: cancelReason,
+          details: cancelDetails,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCancelSuccessMsg(data.message || "Cancellation request submitted.");
+        setTimeout(() => {
+          setShowCancelModal(false);
+          setCancelSuccessMsg("");
+          fetchOrderTracking(orderNumber, email);
+        }, 1500);
+      } else {
+        setCancelError(data.message || "Failed to submit cancellation request.");
+      }
+    } catch {
+      setCancelError("An error occurred while submitting cancellation request.");
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
+  const handleExchangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!orderData || !exchangeItemId) return;
+
+    setExchangeSubmitting(true);
+    setExchangeError("");
+    setExchangeSuccessMsg("");
+
+    try {
+      const res = await fetch("/api/order/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNumber: orderData.orderNumber,
+          email: orderData.customerEmail,
+          orderItemId: exchangeItemId,
+          reason: exchangeReason,
+          details: exchangeDetails,
+          evidenceUrls: evidenceUrl.trim() ? [evidenceUrl.trim()] : [],
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setExchangeSuccessMsg(data.message || "Exchange request submitted.");
+        setTimeout(() => {
+          setShowExchangeModal(false);
+          setExchangeSuccessMsg("");
+          fetchOrderTracking(orderNumber, email);
+        }, 1500);
+      } else {
+        setExchangeError(data.message || "Failed to submit exchange request.");
+      }
+    } catch {
+      setExchangeError("An error occurred while submitting exchange request.");
+    } finally {
+      setExchangeSubmitting(false);
+    }
+  };
+
   const getActiveStepIndex = (status: string) => {
     if (status === "PENDING_PAYMENT") return 0;
     if (status === "CONFIRMED" || status === "PAID") return 0;
@@ -98,6 +219,27 @@ function OrderTrackContent() {
     if (status === "OUT_FOR_DELIVERY") return 3;
     if (status === "DELIVERED") return 4;
     return 0;
+  };
+
+  const isEligibleForCancellation = (order: any) => {
+    if (!order) return false;
+    const cancellableStatuses = ["PENDING_PAYMENT", "CONFIRMED", "PAID", "PROCESSING"];
+    if (!cancellableStatuses.includes(order.orderStatus)) return false;
+    const hasPendingCancellation = (order.cancellations || []).some(
+      (c: any) => c.status === "REQUESTED" || c.status === "APPROVED"
+    );
+    return !hasPendingCancellation;
+  };
+
+  const isEligibleForExchange = (order: any) => {
+    if (!order) return false;
+    if (order.orderStatus !== "DELIVERED") return false;
+    const orderDeliveredDate = order.timeline?.find(
+      (t: any) => t.status === "DELIVERED"
+    )?.timestamp || order.createdAt;
+    const daysSinceDelivery =
+      (Date.now() - new Date(orderDeliveredDate).getTime()) / (1000 * 60 * 60 * 24);
+    return daysSinceDelivery <= 7;
   };
 
   return (
@@ -176,7 +318,7 @@ function OrderTrackContent() {
       {orderData && (
         <div className="space-y-8 animate-fade-in">
           <div className="bg-white border border-duskk-200 rounded-lg p-6 sm:p-8 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-4 border-b border-duskk-100 gap-2">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-4 border-b border-duskk-100 gap-3">
               <div>
                 <span className="text-xs text-duskk-400 font-mono uppercase tracking-wider">
                   Live Tracking
@@ -189,7 +331,7 @@ function OrderTrackContent() {
                 </span>
               </div>
 
-              <div>
+              <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
                     ORDER_STATUS_LABELS[orderData.orderStatus]?.color || "bg-duskk-100 text-duskk-800"
@@ -197,8 +339,122 @@ function OrderTrackContent() {
                 >
                   {ORDER_STATUS_LABELS[orderData.orderStatus]?.label || orderData.orderStatus}
                 </span>
+
+                {/* Customer Action: Cancellation */}
+                {isEligibleForCancellation(orderData) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelModal(true)}
+                    className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-xs font-semibold uppercase tracking-wider transition"
+                  >
+                    Request Cancellation
+                  </button>
+                )}
+
+                {/* Customer Action: Exchange */}
+                {isEligibleForExchange(orderData) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowExchangeModal(true)}
+                    className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-xs font-semibold uppercase tracking-wider transition flex items-center space-x-1"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Request Exchange</span>
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Active Cancellation Notice Banner */}
+            {orderData.cancellations && orderData.cancellations.length > 0 && (
+              <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-lg space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-amber-900 font-semibold uppercase tracking-wider">
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <span>Cancellation Request Status</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-200 text-amber-900">
+                    {orderData.cancellations[0].status}
+                  </span>
+                </div>
+                <p className="text-amber-800">
+                  <strong>Reason:</strong> {orderData.cancellations[0].reason}
+                </p>
+                {orderData.cancellations[0].details && (
+                  <p className="text-amber-700 italic">
+                    &ldquo;{orderData.cancellations[0].details}&rdquo;
+                  </p>
+                )}
+                {orderData.cancellations[0].admin_notes && (
+                  <div className="p-2.5 bg-white border border-amber-200 rounded text-amber-900">
+                    <span className="font-semibold">DUSKK Concierge Note: </span>
+                    {orderData.cancellations[0].admin_notes}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Active Exchange Notice Banner */}
+            {orderData.exchanges && orderData.exchanges.length > 0 && (
+              <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-blue-900 font-semibold uppercase tracking-wider">
+                    <RotateCcw className="w-4 h-4 text-blue-600" />
+                    <span>Product Exchange Request</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-200 text-blue-900">
+                    {orderData.exchanges[0].status}
+                  </span>
+                </div>
+                <p className="text-blue-800">
+                  <strong>Reason:</strong> {orderData.exchanges[0].reason}
+                </p>
+                {orderData.exchanges[0].pickup_tracking_number && (
+                  <p className="text-blue-700">
+                    <strong>Pickup Courier:</strong> {orderData.exchanges[0].pickup_courier} | AWB:{" "}
+                    <span className="font-mono font-semibold">{orderData.exchanges[0].pickup_tracking_number}</span>
+                  </p>
+                )}
+                {orderData.exchanges[0].replacement_tracking_number && (
+                  <p className="text-blue-700">
+                    <strong>Replacement Courier:</strong> {orderData.exchanges[0].replacement_courier} | AWB:{" "}
+                    <span className="font-mono font-semibold">{orderData.exchanges[0].replacement_tracking_number}</span>
+                  </p>
+                )}
+                {orderData.exchanges[0].admin_notes && (
+                  <div className="p-2.5 bg-white border border-blue-200 rounded text-blue-900">
+                    <span className="font-semibold">Concierge Note: </span>
+                    {orderData.exchanges[0].admin_notes}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Active Refund Notice Banner */}
+            {orderData.refunds && orderData.refunds.length > 0 && (
+              <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-lg space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-emerald-900 font-semibold uppercase tracking-wider">
+                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                    <span>Razorpay Refund Reconciled</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-200 text-emerald-900">
+                    {orderData.refunds[0].status}
+                  </span>
+                </div>
+                <p className="text-emerald-800">
+                  <strong>Refund Amount:</strong> {formatPrice(orderData.refunds[0].amount)}
+                  {orderData.refunds[0].razorpay_refund_id && (
+                    <span className="ml-3 font-mono text-[11px] text-emerald-700">
+                      ID: {orderData.refunds[0].razorpay_refund_id}
+                    </span>
+                  )}
+                </p>
+                <p className="text-emerald-700 text-[11px]">
+                  Processed back to your original payment method. Depending on your issuing bank, credits reflect in 5-7 business days.
+                </p>
+              </div>
+            )}
 
             {/* Courier Tracking Details Banner */}
             {(orderData.courierName || orderData.trackingNumber) && (
@@ -341,11 +597,13 @@ function OrderTrackContent() {
                       />
                       <div>
                         <p className="font-semibold text-duskk-900">{item.productName}</p>
-                        <p className="text-[10px] text-duskk-400 font-mono">Qty: {item.quantity}</p>
+                        <p className="text-[10px] text-duskk-400 font-mono">
+                          {item.variantTitle ? `${item.variantTitle} • ` : ""}Qty: {item.quantity}
+                        </p>
                       </div>
                     </div>
                     <span className="font-bold text-duskk-900 font-serif">
-                      {formatPrice(item.subtotal)}
+                      {formatPrice(item.totalPrice || item.price * item.quantity)}
                     </span>
                   </div>
                 ))}
@@ -371,6 +629,231 @@ function OrderTrackContent() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancellation Request Modal */}
+      {showCancelModal && orderData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white max-w-lg w-full rounded-lg shadow-2xl border border-duskk-200 overflow-hidden">
+            <div className="bg-duskk-900 text-white p-4 flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-duskk-gold block">
+                  ORDER LIFECYCLE
+                </span>
+                <h3 className="font-serif text-lg font-medium">
+                  Request Order Cancellation
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                className="text-duskk-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCancelSubmit} className="p-5 space-y-4 text-xs">
+              <p className="text-duskk-600">
+                You are requesting cancellation for Order <strong className="text-duskk-900 font-mono">#{orderData.orderNumber}</strong>. If payment has been captured, an authorized refund will be queued back to your original payment account.
+              </p>
+
+              <div>
+                <label className="block text-duskk-700 font-semibold uppercase tracking-wider mb-1">
+                  Reason for Cancellation *
+                </label>
+                <select
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-duskk-300 rounded bg-white text-duskk-900"
+                >
+                  {CANCELLATION_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-duskk-700 font-semibold uppercase tracking-wider mb-1">
+                  Additional Details (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={cancelDetails}
+                  onChange={(e) => setCancelDetails(e.target.value)}
+                  placeholder="Tell us more about your reason for cancelling..."
+                  className="w-full px-3 py-2 border border-duskk-300 rounded bg-white"
+                />
+              </div>
+
+              {cancelError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded text-rose-700 flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{cancelError}</span>
+                </div>
+              )}
+
+              {cancelSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-emerald-700 flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{cancelSuccessMsg}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-duskk-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelModal(false)}
+                  className="px-4 py-2 border border-duskk-300 rounded text-duskk-700 hover:bg-duskk-50 font-medium transition"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancelSubmitting}
+                  className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded font-semibold uppercase tracking-wider transition disabled:opacity-50 flex items-center space-x-1"
+                >
+                  {cancelSubmitting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <span>Submit Cancellation</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Product Exchange Modal */}
+      {showExchangeModal && orderData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white max-w-lg w-full rounded-lg shadow-2xl border border-duskk-200 overflow-hidden">
+            <div className="bg-duskk-900 text-white p-4 flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-duskk-gold block">
+                  7-DAY SATISFACTION ASSURANCE
+                </span>
+                <h3 className="font-serif text-lg font-medium">
+                  Request Product Exchange
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExchangeModal(false)}
+                className="text-duskk-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExchangeSubmit} className="p-5 space-y-4 text-xs">
+              <p className="text-duskk-600">
+                Select the jewellery piece you wish to exchange. Our concierge team will review your request and arrange a complimentary insured pickup.
+              </p>
+
+              <div>
+                <label className="block text-duskk-700 font-semibold uppercase tracking-wider mb-1">
+                  Select Item to Exchange *
+                </label>
+                <select
+                  value={exchangeItemId}
+                  onChange={(e) => setExchangeItemId(e.target.value)}
+                  className="w-full px-3 py-2 border border-duskk-300 rounded bg-white text-duskk-900"
+                >
+                  {orderData.items.map((i: any) => (
+                    <option key={i.id} value={i.id}>
+                      {i.productName} {i.variantTitle ? `(${i.variantTitle})` : ""} - Qty: {i.quantity}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-duskk-700 font-semibold uppercase tracking-wider mb-1">
+                  Reason for Exchange *
+                </label>
+                <select
+                  value={exchangeReason}
+                  onChange={(e) => setExchangeReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-duskk-300 rounded bg-white text-duskk-900"
+                >
+                  {EXCHANGE_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-duskk-700 font-semibold uppercase tracking-wider mb-1">
+                  Details / Desired Replacement
+                </label>
+                <textarea
+                  rows={3}
+                  value={exchangeDetails}
+                  onChange={(e) => setExchangeDetails(e.target.value)}
+                  placeholder="Please specify size or desired replacement variant..."
+                  className="w-full px-3 py-2 border border-duskk-300 rounded bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-duskk-700 font-semibold uppercase tracking-wider mb-1">
+                  Evidence Photo URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={evidenceUrl}
+                  onChange={(e) => setEvidenceUrl(e.target.value)}
+                  className="w-full px-3 py-2 border border-duskk-300 rounded bg-white font-mono text-[11px]"
+                />
+                <p className="text-[10px] text-duskk-400 mt-1">
+                  Provide an image link if item arrived damaged or defective.
+                </p>
+              </div>
+
+              {exchangeError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded text-rose-700 flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{exchangeError}</span>
+                </div>
+              )}
+
+              {exchangeSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-emerald-700 flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{exchangeSuccessMsg}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-duskk-100">
+                <button
+                  type="button"
+                  onClick={() => setShowExchangeModal(false)}
+                  className="px-4 py-2 border border-duskk-300 rounded text-duskk-700 hover:bg-duskk-50 font-medium transition"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={exchangeSubmitting}
+                  className="px-4 py-2 bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white rounded font-semibold uppercase tracking-wider transition disabled:opacity-50 flex items-center space-x-1"
+                >
+                  {exchangeSubmitting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <span>Submit Exchange Request</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

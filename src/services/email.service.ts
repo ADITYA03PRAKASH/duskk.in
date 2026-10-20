@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter, type SendMailOptions } from "nodemailer";
 import { formatPrice } from "@/lib/utils";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DUSKK_NOTIFICATION_EMAIL = "duskk.india@gmail.com";
 
@@ -184,6 +185,91 @@ export async function executeSendMailDetailed(mailOptions: SendMailOptions): Pro
 async function executeSendMail(mailOptions: SendMailOptions): Promise<boolean> {
   const result = await executeSendMailDetailed(mailOptions);
   return result.success;
+}
+
+export interface LogAndSendEmailOptions {
+  orderId?: string;
+  recipientEmail: string;
+  emailType: string;
+  subject: string;
+  html: string;
+  text?: string;
+  idempotencyKey?: string;
+  metadata?: Record<string, any>;
+}
+
+export async function logAndSendEmail(options: LogAndSendEmailOptions): Promise<EmailSendResult> {
+  const { orderId, recipientEmail, emailType, subject, html, text, idempotencyKey, metadata } = options;
+  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
+
+  // 1. Idempotency Check in order_email_logs if idempotencyKey and orderId provided
+  if (orderId && idempotencyKey) {
+    try {
+      const { data: existingLog } = await supabaseAdmin
+        .from("order_email_logs")
+        .select("id, status, message_id")
+        .eq("idempotency_key", idempotencyKey)
+        .single();
+
+      if (existingLog && existingLog.status === "SENT") {
+        console.log(`[Email] Skipping duplicate email ${emailType} for order ${orderId} (idempotency key: ${idempotencyKey})`);
+        return { success: true, messageId: existingLog.message_id || "already_sent" };
+      }
+    } catch {
+      // Non-fatal if order_email_logs check fails
+    }
+  }
+
+  // 2. Execute SendMail
+  const sendResult = await executeSendMailDetailed({
+    from: fromAddress,
+    to: recipientEmail,
+    replyTo: "duskk.india@gmail.com",
+    subject,
+    html,
+    text,
+  });
+
+  // 3. Record in order_email_logs if orderId provided
+  if (orderId) {
+    try {
+      if (idempotencyKey) {
+        await supabaseAdmin
+          .from("order_email_logs")
+          .upsert({
+            order_id: orderId,
+            recipient_email: recipientEmail,
+            email_type: emailType,
+            subject,
+            status: sendResult.success ? "SENT" : "FAILED",
+            message_id: sendResult.messageId || null,
+            provider_response: sendResult.response || null,
+            error_message: sendResult.error || null,
+            metadata: metadata || {},
+            idempotency_key: idempotencyKey,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "idempotency_key" });
+      } else {
+        await supabaseAdmin
+          .from("order_email_logs")
+          .insert({
+            order_id: orderId,
+            recipient_email: recipientEmail,
+            email_type: emailType,
+            subject,
+            status: sendResult.success ? "SENT" : "FAILED",
+            message_id: sendResult.messageId || null,
+            provider_response: sendResult.response || null,
+            error_message: sendResult.error || null,
+            metadata: metadata || {},
+          });
+      }
+    } catch (logErr) {
+      console.warn("[Email] Failed to log email to order_email_logs:", logErr);
+    }
+  }
+
+  return sendResult;
 }
 
 // SMTP Diagnostic Runner for Production Health Inspection
@@ -449,13 +535,14 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
 }
 
 // ---------------------------------------------------------------------------
-// 2. ORDER STATUS UPDATE EMAILS (SHIPPED, OUT_FOR_DELIVERY, DELIVERED, CANCELLED)
+// 2. ORDER STATUS UPDATE EMAILS (PROCESSING, SHIPPED, OUT_FOR_DELIVERY, DELIVERED, CANCELLED)
 // ---------------------------------------------------------------------------
 export interface OrderStatusEmailData {
+  orderId?: string;
   orderNumber: string;
   customerName: string;
   customerEmail: string;
-  status: "SHIPPED" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED" | string;
+  status: "PENDING_PAYMENT" | "PAID" | "CONFIRMED" | "PROCESSING" | "SHIPPED" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED" | "REFUNDED" | string;
   amount?: number;
   reason?: string;
   trackingInfo?: {
@@ -468,7 +555,6 @@ export interface OrderStatusEmailData {
 
 export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Promise<boolean> {
   const siteUrl = getSiteUrl();
-  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
   let subject = `Update on your DUSKK Order #${data.orderNumber}`;
   let statusBadge = data.status;
   let statusBadgeColor = "#0F0F0F";
@@ -476,7 +562,22 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
 
   const normStatus = data.status.toUpperCase();
 
-  if (normStatus === "SHIPPED") {
+  if (normStatus === "PROCESSING") {
+    subject = `Your DUSKK Order #${data.orderNumber} is Being Prepared`;
+    statusBadge = "PROCESSING & PACKAGING";
+    statusBadgeColor = "#4F46E5";
+
+    specificContent = `
+      <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+        Your order <strong style="color: #111111;">#${data.orderNumber}</strong> has been verified. Our master artisans are currently inspecting, hand-polishing, and packaging your curated pieces into DUSKK&apos;s signature velvet unboxing.
+      </p>
+      <div style="background-color: #FAF8F5; border-left: 4px solid #C5A880; padding: 14px 18px; margin: 20px 0;">
+        <p style="margin: 0; font-size: 13px; color: #333333; line-height: 1.5;">
+          Once your package is handed over to our insured express logistics partner, you will receive an immediate dispatch update along with your tracking AWB.
+        </p>
+      </div>
+    `;
+  } else if (normStatus === "SHIPPED") {
     subject = `Your DUSKK Order #${data.orderNumber} Has Been Dispatched`;
     statusBadge = "DISPATCHED & IN TRANSIT";
     statusBadgeColor = "#2563EB";
@@ -502,7 +603,7 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
             }
             ${
               data.trackingInfo?.trackingNumber
-                ? `<tr><td style="padding: 4px 0; color: #666666;">AWB / Tracking No:</td><td style="padding: 4px 0; color: #111111; font-mono; font-weight: 600;">${data.trackingInfo.trackingNumber}</td></tr>`
+                ? `<tr><td style="padding: 4px 0; color: #666666;">AWB / Tracking No:</td><td style="padding: 4px 0; color: #111111; font-family: monospace; font-weight: 600;">${data.trackingInfo.trackingNumber}</td></tr>`
                 : ""
             }
             ${
@@ -555,9 +656,9 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
       </p>
 
       <div style="background-color: #FAF8F5; border: 1px solid #E5DFD7; padding: 16px 18px; border-radius: 6px; margin: 24px 0;">
-        <h4 style="margin: 0 0 6px 0; font-size: 13px; color: #111111; font-weight: 600;">Customer Support & Assistance</h4>
+        <h4 style="margin: 0 0 6px 0; font-size: 13px; color: #111111; font-weight: 600;">7-Day Easy Returns & Exchanges Assurance</h4>
         <p style="margin: 0; font-size: 12px; color: #666666; line-height: 1.5;">
-          If your item arrived damaged, defective, or incorrect, please report it within <strong>48 hours of delivery</strong> through our <a href="${siteUrl}/contact" style="color: #9A7B4F; text-decoration: underline;">Contact Desk</a> or by emailing <a href="mailto:duskk.india@gmail.com" style="color: #9A7B4F; text-decoration: underline;">duskk.india@gmail.com</a> with photographs.
+          If your item arrived damaged, defective, or incorrect, you can request an exchange or return within <strong>7 days of delivery</strong> directly on our <a href="${siteUrl}/order/track" style="color: #9A7B4F; text-decoration: underline;">Tracking Portal</a> or by emailing <a href="mailto:duskk.india@gmail.com" style="color: #9A7B4F; text-decoration: underline;">duskk.india@gmail.com</a>.
         </p>
       </div>
     `;
@@ -587,7 +688,7 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
         data.amount && data.amount > 0
           ? `
         <p style="color: #555555; font-size: 13px; line-height: 1.6; margin: 20px 0 0 0;">
-          If your payment of <strong>${formatPrice(data.amount)}</strong> was already processed, our team is initiating the refund back to your original payment method.
+          If your payment of <strong>${formatPrice(data.amount)}</strong> was already captured, our team has initiated the refund process back to your original payment method. The refund will reflect within 5–7 business days.
         </p>
       `
           : ""
@@ -620,40 +721,376 @@ export async function sendOrderStatusUpdateEmail(data: OrderStatusEmailData): Pr
 
   const emailHtml = buildEmailTemplate(bodyContent);
 
-  return executeSendMail({
-    from: fromAddress,
-    to: data.customerEmail,
+  const idempotencyKey = `email_status_${data.orderNumber}_${normStatus}_${Date.now()}`;
+  const sendRes = await logAndSendEmail({
+    orderId: data.orderId,
+    recipientEmail: data.customerEmail,
+    emailType: `STATUS_${normStatus}`,
     subject,
     html: emailHtml,
+    idempotencyKey,
   });
+
+  return sendRes.success;
 }
 
 // ---------------------------------------------------------------------------
-// 3. REFUND CONFIRMATION EMAIL
+// 3. CANCELLATION REQUEST & DECISION NOTIFICATIONS
+// ---------------------------------------------------------------------------
+export interface CancellationEmailData {
+  orderId?: string;
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  reason: string;
+  details?: string | null;
+  decision?: "APPROVED" | "REJECTED";
+  adminNotes?: string | null;
+  refundAmount?: number;
+}
+
+export async function sendCancellationRequestReceivedEmail(data: CancellationEmailData): Promise<boolean> {
+  const subject = `Cancellation Request Received — DUSKK Order #${data.orderNumber}`;
+
+  const bodyContent = `
+    <div style="margin-bottom: 24px;">
+      <span style="display: inline-block; background-color: #D97706; color: #FFFFFF; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border-radius: 3px;">
+        CANCELLATION REQUESTED
+      </span>
+    </div>
+
+    <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif;">Hello, ${data.customerName}</h2>
+    <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      We have received your cancellation request for order <strong style="color: #111111;">#${data.orderNumber}</strong>.
+    </p>
+
+    <div style="background-color: #FAF8F5; border: 1px solid #E5DFD7; padding: 18px 20px; border-radius: 6px; margin: 20px 0; font-size: 13px;">
+      <p style="margin: 0 0 8px 0;"><strong>Reason:</strong> ${data.reason}</p>
+      ${data.details ? `<p style="margin: 0; color: #666666;"><strong>Details:</strong> ${data.details}</p>` : ""}
+    </div>
+
+    <p style="color: #555555; font-size: 13px; line-height: 1.6;">
+      Our fulfillment team will review your request against warehouse dispatch status. If your order has not been dispatched yet, we will approve the cancellation and initiate a full refund. You will receive an update once reviewed.
+    </p>
+
+    <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #EAEAEA;">
+      <p style="margin: 0; font-size: 12px; color: #777777;">
+        Order Reference: <strong>#${data.orderNumber}</strong> &bull; Need help? Reach us at <a href="mailto:duskk.india@gmail.com" style="color: #777777; text-decoration: underline;">duskk.india@gmail.com</a>
+      </p>
+    </div>
+  `;
+
+  const emailHtml = buildEmailTemplate(bodyContent);
+  const idempotencyKey = `email_canc_req_${data.orderNumber}_${Date.now()}`;
+
+  const res = await logAndSendEmail({
+    orderId: data.orderId,
+    recipientEmail: data.customerEmail,
+    emailType: "CANCELLATION_REQUESTED",
+    subject,
+    html: emailHtml,
+    idempotencyKey,
+  });
+
+  return res.success;
+}
+
+export async function sendCancellationDecisionEmail(data: CancellationEmailData): Promise<boolean> {
+  const isApproved = data.decision === "APPROVED";
+  const subject = isApproved
+    ? `Cancellation Approved — DUSKK Order #${data.orderNumber}`
+    : `Cancellation Request Update — DUSKK Order #${data.orderNumber}`;
+
+  const statusBadge = isApproved ? "CANCELLATION APPROVED" : "CANCELLATION REJECTED";
+  const statusBadgeColor = isApproved ? "#16A34A" : "#DC2626";
+
+  const specificContent = isApproved
+    ? `
+      <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+        Your cancellation request for order <strong style="color: #111111;">#${data.orderNumber}</strong> has been <strong>approved</strong> and the order has been cancelled.
+      </p>
+      ${
+        data.refundAmount && data.refundAmount > 0
+          ? `
+        <div style="background-color: #F0FDF4; border: 1px solid #BBF7D0; padding: 18px 20px; border-radius: 6px; margin: 20px 0; font-size: 13px;">
+          <p style="margin: 0 0 6px 0; color: #166534; font-weight: 600;">Refund Initiated</p>
+          <p style="margin: 0; color: #15803D;">
+            A refund of <strong>${formatPrice(data.refundAmount)}</strong> has been approved and is being processed through Razorpay back to your original payment method (card, UPI, or net banking). It usually reflects within <strong>5–7 business days</strong>.
+          </p>
+        </div>
+      `
+          : ""
+      }
+    `
+    : `
+      <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+        We were unable to approve your cancellation request for order <strong style="color: #111111;">#${data.orderNumber}</strong>.
+      </p>
+      <div style="background-color: #FEF2F2; border: 1px solid #FECACA; padding: 16px 18px; border-radius: 6px; margin: 20px 0; font-size: 13px; color: #991B1B;">
+        <p style="margin: 0;"><strong>Reason:</strong> ${data.adminNotes || "Order has already been packed and handed over to logistics partner."}</p>
+      </div>
+      <p style="color: #555555; font-size: 13px; line-height: 1.6;">
+        Once the package arrives at your destination, you may request an exchange or return within our 7-day policy window.
+      </p>
+    `;
+
+  const bodyContent = `
+    <div style="margin-bottom: 24px;">
+      <span style="display: inline-block; background-color: ${statusBadgeColor}; color: #FFFFFF; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border-radius: 3px;">
+        ${statusBadge}
+      </span>
+    </div>
+
+    <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif;">Hello, ${data.customerName}</h2>
+    ${specificContent}
+
+    <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #EAEAEA;">
+      <p style="margin: 0; font-size: 12px; color: #777777;">
+        Order Reference: <strong>#${data.orderNumber}</strong> &bull; Need help? Reach us at <a href="mailto:duskk.india@gmail.com" style="color: #777777; text-decoration: underline;">duskk.india@gmail.com</a>
+      </p>
+    </div>
+  `;
+
+  const emailHtml = buildEmailTemplate(bodyContent);
+  const idempotencyKey = `email_canc_dec_${data.orderNumber}_${data.decision}_${Date.now()}`;
+
+  const res = await logAndSendEmail({
+    orderId: data.orderId,
+    recipientEmail: data.customerEmail,
+    emailType: `CANCELLATION_${data.decision}`,
+    subject,
+    html: emailHtml,
+    idempotencyKey,
+  });
+
+  return res.success;
+}
+
+// ---------------------------------------------------------------------------
+// 4. PRODUCT EXCHANGE & REPLACEMENT NOTIFICATIONS
+// ---------------------------------------------------------------------------
+export interface ExchangeEmailData {
+  orderId?: string;
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  productTitle: string;
+  reason: string;
+  details?: string | null;
+  status: "REQUESTED" | "APPROVED" | "PICKUP_SCHEDULED" | "REPLACEMENT_DISPATCHED" | "COMPLETED" | "REJECTED";
+  pickupCourier?: string | null;
+  pickupAwb?: string | null;
+  replacementCourier?: string | null;
+  replacementAwb?: string | null;
+  adminNotes?: string | null;
+}
+
+export async function sendExchangeRequestReceivedEmail(data: ExchangeEmailData): Promise<boolean> {
+  const subject = `Exchange Request Received — DUSKK Order #${data.orderNumber}`;
+
+  const bodyContent = `
+    <div style="margin-bottom: 24px;">
+      <span style="display: inline-block; background-color: #D97706; color: #FFFFFF; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border-radius: 3px;">
+        EXCHANGE UNDER REVIEW
+      </span>
+    </div>
+
+    <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif;">Hello, ${data.customerName}</h2>
+    <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      We have received your product exchange request for <strong style="color: #111111;">${data.productTitle}</strong> from order <strong style="color: #111111;">#${data.orderNumber}</strong>.
+    </p>
+
+    <div style="background-color: #FAF8F5; border: 1px solid #E5DFD7; padding: 18px 20px; border-radius: 6px; margin: 20px 0; font-size: 13px;">
+      <p style="margin: 0 0 6px 0;"><strong>Reason:</strong> ${data.reason}</p>
+      ${data.details ? `<p style="margin: 0; color: #666666;"><strong>Customer Notes:</strong> ${data.details}</p>` : ""}
+    </div>
+
+    <p style="color: #555555; font-size: 13px; line-height: 1.6;">
+      Our quality assurance team is reviewing the details and evidence. Upon approval, we will schedule a doorstep reverse pickup and arrange your replacement piece.
+    </p>
+
+    <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #EAEAEA;">
+      <p style="margin: 0; font-size: 12px; color: #777777;">
+        Order Reference: <strong>#${data.orderNumber}</strong> &bull; Need help? Reach us at <a href="mailto:duskk.india@gmail.com" style="color: #777777; text-decoration: underline;">duskk.india@gmail.com</a>
+      </p>
+    </div>
+  `;
+
+  const emailHtml = buildEmailTemplate(bodyContent);
+  const idempotencyKey = `email_exch_req_${data.orderNumber}_${Date.now()}`;
+
+  const res = await logAndSendEmail({
+    orderId: data.orderId,
+    recipientEmail: data.customerEmail,
+    emailType: "EXCHANGE_REQUESTED",
+    subject,
+    html: emailHtml,
+    idempotencyKey,
+  });
+
+  return res.success;
+}
+
+export async function sendExchangeDecisionEmail(data: ExchangeEmailData): Promise<boolean> {
+  const norm = data.status.toUpperCase();
+  let subject = `Exchange Update: Order #${data.orderNumber}`;
+  let statusBadge = "EXCHANGE UPDATE";
+  let statusBadgeColor = "#4F46E5";
+  let content = "";
+
+  if (norm === "APPROVED" || norm === "PICKUP_SCHEDULED") {
+    subject = `Exchange Approved & Reverse Pickup Scheduled — DUSKK Order #${data.orderNumber}`;
+    statusBadge = "PICKUP SCHEDULED";
+    statusBadgeColor = "#2563EB";
+
+    content = `
+      <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+        Your exchange request for <strong style="color: #111111;">${data.productTitle}</strong> has been <strong>approved</strong>. We have scheduled a reverse pickup from your delivery destination.
+      </p>
+
+      ${
+        data.pickupCourier || data.pickupAwb
+          ? `
+        <div style="background-color: #FAF8F5; border: 1px solid #E5DFD7; padding: 18px 20px; border-radius: 6px; margin: 20px 0; font-size: 13px;">
+          <h4 style="margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 1px; color: #111111;">Reverse Pickup Information</h4>
+          ${data.pickupCourier ? `<p style="margin: 0 0 4px 0;"><strong>Logistics Partner:</strong> ${data.pickupCourier}</p>` : ""}
+          ${data.pickupAwb ? `<p style="margin: 0; font-family: monospace;"><strong>Pickup AWB / Ref:</strong> ${data.pickupAwb}</p>` : ""}
+        </div>
+      `
+          : ""
+      }
+
+      <div style="background-color: #FFFBEB; border-left: 4px solid #F59E0B; padding: 14px 18px; margin: 20px 0; font-size: 13px; color: #92400E;">
+        Please ensure the product is packed in its original DUSKK brand box along with tags, certificates, and pouches before handover.
+      </div>
+    `;
+  } else if (norm === "REPLACEMENT_DISPATCHED") {
+    subject = `Replacement Dispatched — DUSKK Order #${data.orderNumber}`;
+    statusBadge = "REPLACEMENT DISPATCHED";
+    statusBadgeColor = "#16A34A";
+
+    content = `
+      <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+        Your replacement item for <strong style="color: #111111;">${data.productTitle}</strong> has passed final quality verification and has been dispatched!
+      </p>
+
+      ${
+        data.replacementCourier || data.replacementAwb
+          ? `
+        <div style="background-color: #FAF8F5; border: 1px solid #E5DFD7; padding: 18px 20px; border-radius: 6px; margin: 20px 0; font-size: 13px;">
+          <h4 style="margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 1px; color: #111111;">Replacement Dispatch Details</h4>
+          ${data.replacementCourier ? `<p style="margin: 0 0 4px 0;"><strong>Courier:</strong> ${data.replacementCourier}</p>` : ""}
+          ${data.replacementAwb ? `<p style="margin: 0; font-family: monospace;"><strong>AWB / Tracking Number:</strong> ${data.replacementAwb}</p>` : ""}
+        </div>
+      `
+          : ""
+      }
+    `;
+  } else if (norm === "COMPLETED") {
+    subject = `Exchange Completed — DUSKK Order #${data.orderNumber}`;
+    statusBadge = "EXCHANGE COMPLETED";
+    statusBadgeColor = "#16A34A";
+
+    content = `
+      <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+        Your exchange process for order <strong style="color: #111111;">#${data.orderNumber}</strong> has been successfully completed. Thank you for your patience and for choosing DUSKK.
+      </p>
+    `;
+  } else if (norm === "REJECTED") {
+    subject = `Exchange Request Update — DUSKK Order #${data.orderNumber}`;
+    statusBadge = "EXCHANGE REJECTED";
+    statusBadgeColor = "#DC2626";
+
+    content = `
+      <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+        We have reviewed your exchange request for order <strong style="color: #111111;">#${data.orderNumber}</strong>. Unfortunately, we are unable to process this exchange.
+      </p>
+      <div style="background-color: #FEF2F2; border: 1px solid #FECACA; padding: 14px 18px; border-radius: 6px; margin: 20px 0; font-size: 13px; color: #991B1B;">
+        <strong>Reason:</strong> ${data.adminNotes || "Eligibility window elapsed or item does not satisfy exchange requirements."}
+      </div>
+    `;
+  }
+
+  const bodyContent = `
+    <div style="margin-bottom: 24px;">
+      <span style="display: inline-block; background-color: ${statusBadgeColor}; color: #FFFFFF; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border-radius: 3px;">
+        ${statusBadge}
+      </span>
+    </div>
+
+    <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif;">Hello, ${data.customerName}</h2>
+    ${content}
+
+    <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #EAEAEA;">
+      <p style="margin: 0; font-size: 12px; color: #777777;">
+        Order Reference: <strong>#${data.orderNumber}</strong> &bull; Need help? Reach us at <a href="mailto:duskk.india@gmail.com" style="color: #777777; text-decoration: underline;">duskk.india@gmail.com</a>
+      </p>
+    </div>
+  `;
+
+  const emailHtml = buildEmailTemplate(bodyContent);
+  const idempotencyKey = `email_exch_${data.orderNumber}_${norm}_${Date.now()}`;
+
+  const res = await logAndSendEmail({
+    orderId: data.orderId,
+    recipientEmail: data.customerEmail,
+    emailType: `EXCHANGE_${norm}`,
+    subject,
+    html: emailHtml,
+    idempotencyKey,
+  });
+
+  return res.success;
+}
+
+// ---------------------------------------------------------------------------
+// 5. REFUND CONFIRMATION & STATUS EMAIL
 // ---------------------------------------------------------------------------
 export interface RefundEmailData {
+  orderId?: string;
   orderNumber: string;
   customerName: string;
   customerEmail: string;
   refundAmount: number;
   refundReference?: string;
-  refundStatus?: string;
+  refundStatus?: "REQUESTED" | "APPROVED" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
+  reason?: string;
 }
 
 export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
-  const fromAddress = (process.env.SMTP_FROM || "DUSKK <duskk.india@gmail.com>").replace(/^["']|["']$/g, "").trim();
-  const subject = `DUSKK Refund Confirmation — Order #${data.orderNumber}`;
+  const normStatus = (data.refundStatus || "COMPLETED").toUpperCase();
+  let statusBadge = "REFUND PROCESSED";
+  let statusBadgeColor = "#16A34A";
+  let subject = `DUSKK Refund Confirmation — Order #${data.orderNumber}`;
+  let leadText = `A refund for your order <strong style="color: #111111;">#${data.orderNumber}</strong> has been successfully initiated.`;
+
+  if (normStatus === "REQUESTED" || normStatus === "APPROVED") {
+    statusBadge = "REFUND APPROVED";
+    statusBadgeColor = "#2563EB";
+    subject = `Refund Approved — DUSKK Order #${data.orderNumber}`;
+    leadText = `Your refund request for order <strong style="color: #111111;">#${data.orderNumber}</strong> has been approved and queued for processing via Razorpay.`;
+  } else if (normStatus === "PROCESSING") {
+    statusBadge = "REFUND PROCESSING";
+    statusBadgeColor = "#D97706";
+    subject = `Refund Processing — DUSKK Order #${data.orderNumber}`;
+    leadText = `Your refund for order <strong style="color: #111111;">#${data.orderNumber}</strong> is currently being processed with our payment gateway partner.`;
+  } else if (normStatus === "FAILED") {
+    statusBadge = "REFUND ACTION REQUIRED";
+    statusBadgeColor = "#DC2626";
+    subject = `Refund Notice — DUSKK Order #${data.orderNumber}`;
+    leadText = `We encountered an issue attempting to refund order <strong style="color: #111111;">#${data.orderNumber}</strong>. Our finance desk is investigating.`;
+  }
 
   const bodyContent = `
     <div style="margin-bottom: 24px;">
-      <span style="display: inline-block; background-color: #16A34A; color: #FFFFFF; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border-radius: 3px;">
-        REFUND PROCESSED
+      <span style="display: inline-block; background-color: ${statusBadgeColor}; color: #FFFFFF; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px; border-radius: 3px;">
+        ${statusBadge}
       </span>
     </div>
 
-    <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif;">Refund Confirmation for ${data.customerName}</h2>
+    <h2 style="font-size: 20px; color: #111111; margin: 0 0 12px 0; font-family: Georgia, serif;">Refund Update for ${data.customerName}</h2>
     <p style="color: #444444; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
-      A refund for your order <strong style="color: #111111;">#${data.orderNumber}</strong> has been successfully initiated.
+      ${leadText}
     </p>
 
     <div style="background-color: #FAF8F5; border: 1px solid #E5DFD7; padding: 18px 20px; border-radius: 6px; margin: 20px 0;">
@@ -666,7 +1103,7 @@ export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
         </tr>
         <tr>
           <td style="padding: 6px 0; color: #666666;">Order Number:</td>
-          <td style="padding: 6px 0; text-align: right; color: #111111; font-mono;">
+          <td style="padding: 6px 0; text-align: right; color: #111111; font-family: monospace;">
             #${data.orderNumber}
           </td>
         </tr>
@@ -674,9 +1111,21 @@ export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
           data.refundReference
             ? `
           <tr>
-            <td style="padding: 6px 0; color: #666666;">Refund Reference:</td>
-            <td style="padding: 6px 0; text-align: right; color: #111111; font-mono; font-size: 12px;">
+            <td style="padding: 6px 0; color: #666666;">Razorpay Reference:</td>
+            <td style="padding: 6px 0; text-align: right; color: #111111; font-family: monospace; font-size: 12px;">
               ${data.refundReference}
+            </td>
+          </tr>
+        `
+            : ""
+        }
+        ${
+          data.reason
+            ? `
+          <tr>
+            <td style="padding: 6px 0; color: #666666;">Reason:</td>
+            <td style="padding: 6px 0; text-align: right; color: #111111; font-size: 12px;">
+              ${data.reason}
             </td>
           </tr>
         `
@@ -697,13 +1146,18 @@ export async function sendRefundEmail(data: RefundEmailData): Promise<boolean> {
   `;
 
   const emailHtml = buildEmailTemplate(bodyContent);
+  const idempotencyKey = `email_rfnd_${data.orderNumber}_${normStatus}_${Date.now()}`;
 
-  return executeSendMail({
-    from: fromAddress,
-    to: data.customerEmail,
+  const res = await logAndSendEmail({
+    orderId: data.orderId,
+    recipientEmail: data.customerEmail,
+    emailType: `REFUND_${normStatus}`,
     subject,
     html: emailHtml,
+    idempotencyKey,
   });
+
+  return res.success;
 }
 
 // ---------------------------------------------------------------------------
