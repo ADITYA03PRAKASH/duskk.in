@@ -46,6 +46,10 @@ export async function GET(
 
     const formattedProduct = {
       ...product,
+      description: product.description || "",
+      shortDescription: product.short_description || "",
+      material: product.specifications?.material || product.specifications?.Material || "",
+      color: product.specifications?.color || product.specifications?.Color || "",
       displayRating: ratingInfo.displayRating,
       ratingSource: ratingInfo.ratingSource,
       manualRating: product.manual_rating ?? product.specifications?.rating_settings?.manual_rating ?? null,
@@ -214,32 +218,57 @@ export async function PUT(
     if (bestSeller !== undefined) updates.is_bestseller = bestSeller;
     if (newArrival !== undefined) updates.is_new_arrival = newArrival;
 
-    if (specifications !== undefined || updates.display_rating !== undefined || updates.rating_source !== undefined || updates.manual_rating !== undefined || updates.manual_review_count !== undefined) {
-      let baseSpecs = specifications;
-      if (!baseSpecs) {
-        const { data: currentProdSpecs } = await supabaseAdmin
-          .from("products")
-          .select("specifications")
-          .eq("id", params.id)
-          .maybeSingle();
-        baseSpecs = (currentProdSpecs?.specifications && typeof currentProdSpecs.specifications === "object")
+    // Specifications & Rating Settings Merge:
+    // Ensure all existing specification keys (dimensions, stones, warranty, etc.) are preserved.
+    if (
+      specifications !== undefined ||
+      material !== undefined ||
+      color !== undefined ||
+      updates.display_rating !== undefined ||
+      updates.rating_source !== undefined ||
+      updates.manual_rating !== undefined ||
+      updates.manual_review_count !== undefined
+    ) {
+      const { data: currentProdSpecs } = await supabaseAdmin
+        .from("products")
+        .select("specifications")
+        .eq("id", params.id)
+        .maybeSingle();
+
+      const existingSpecs =
+        currentProdSpecs?.specifications && typeof currentProdSpecs.specifications === "object"
           ? { ...currentProdSpecs.specifications }
           : {};
+
+      const baseSpecs: Record<string, any> = {
+        ...existingSpecs,
+        ...(specifications && typeof specifications === "object" ? specifications : {}),
+      };
+
+      if (material !== undefined) {
+        baseSpecs.material = material;
       }
-      const existingRatingSettings = baseSpecs.rating_settings || {};
-      baseSpecs.rating_settings = {
-        ...existingRatingSettings,
-        display_rating: updates.display_rating !== undefined ? updates.display_rating : (existingRatingSettings.display_rating ?? true),
-        rating_source: updates.rating_source !== undefined ? updates.rating_source : (existingRatingSettings.rating_source || "AUTO"),
-        manual_rating: updates.manual_rating !== undefined ? updates.manual_rating : (existingRatingSettings.manual_rating ?? null),
-        manual_review_count: updates.manual_review_count !== undefined ? updates.manual_review_count : (existingRatingSettings.manual_review_count ?? null),
-      };
+      if (color !== undefined) {
+        baseSpecs.color = color;
+      }
+
+      if (
+        updates.display_rating !== undefined ||
+        updates.rating_source !== undefined ||
+        updates.manual_rating !== undefined ||
+        updates.manual_review_count !== undefined
+      ) {
+        const existingRatingSettings = baseSpecs.rating_settings || {};
+        baseSpecs.rating_settings = {
+          ...existingRatingSettings,
+          display_rating: updates.display_rating !== undefined ? updates.display_rating : (existingRatingSettings.display_rating ?? true),
+          rating_source: updates.rating_source !== undefined ? updates.rating_source : (existingRatingSettings.rating_source || "AUTO"),
+          manual_rating: updates.manual_rating !== undefined ? updates.manual_rating : (existingRatingSettings.manual_rating ?? null),
+          manual_review_count: updates.manual_review_count !== undefined ? updates.manual_review_count : (existingRatingSettings.manual_review_count ?? null),
+        };
+      }
+
       updates.specifications = baseSpecs;
-    } else if (material || color) {
-      updates.specifications = {
-        material: material || "Demi-Fine Gold on 925 Sterling Silver",
-        color: color || "Gold",
-      };
     }
 
     const { data: updated, error } = await supabaseAdmin

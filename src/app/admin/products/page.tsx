@@ -144,10 +144,12 @@ export default function AdminProductsPage() {
     setMrp((p.mrp ?? p.price ?? "").toString());
     setDiscount(p.discount?.toString() || "0");
     setStockQuantity((p.stockQuantity ?? 20).toString());
-    setMaterial(p.material || "Demi-Fine Gold on 925 Sterling Silver");
-    setColor(p.color || "Gold");
+    const existingMaterial = p.material || p.specifications?.material || p.specifications?.Material || "";
+    const existingColor = p.color || p.specifications?.color || p.specifications?.Color || "";
+    setMaterial(existingMaterial);
+    setColor(existingColor);
     setDescription(p.description || "");
-    setShortDescription(p.shortDescription || "");
+    setShortDescription(p.shortDescription || p.short_description || "");
     setFeatured(!!p.featured);
     setBestSeller(!!p.bestSeller);
     setNewArrival(!!p.newArrival);
