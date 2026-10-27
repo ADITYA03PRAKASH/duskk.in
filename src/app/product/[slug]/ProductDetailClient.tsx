@@ -32,7 +32,7 @@ export function ProductDetailClient({ product }: { product: any }) {
   const [isAdded, setIsAdded] = useState(false);
 
   const rawImages = product.images || product.product_images;
-  const images =
+  const rawList =
     rawImages && rawImages.length > 0
       ? rawImages.map((img: any) => ({
           url: normalizeImageUrl(img, getProductPrimaryImage(product, "/placeholder.svg")),
@@ -44,6 +44,22 @@ export function ProductDetailClient({ product }: { product: any }) {
             altText: product.name,
           },
         ];
+
+  // Filter out any duplicate image URLs while preserving display order
+  const images: Array<{ url: string; altText: string }> = [];
+  const seenUrls = new Set<string>();
+  for (const item of rawList) {
+    if (item.url && !seenUrls.has(item.url)) {
+      seenUrls.add(item.url);
+      images.push(item);
+    }
+  }
+  if (images.length === 0) {
+    images.push({
+      url: getProductPrimaryImage(product, "/placeholder.svg"),
+      altText: product.name,
+    });
+  }
 
   const currentImage = images[selectedImageIndex] || images[0];
   const isOutOfStock = product.stockQuantity <= 0;

@@ -62,25 +62,73 @@ export function ProductCard({ product }: { product: any }) {
     setTimeout(() => setIsAdded(false), 1500);
   };
 
+  const hasBackImage = Boolean(secondaryImg && secondaryImg !== primaryImg && secondaryImg !== "/placeholder.svg");
+
+  const [activeImageSide, setActiveImageSide] = useState<"front" | "back">("front");
+
+  // Determine whether to show the back image: either user tapped on mobile, or hovered on desktop
+  const showBackImage = hasBackImage && (activeImageSide === "back" || (isHovered && activeImageSide === "front"));
+
+  const toggleImageSide = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!hasBackImage) return;
+    setActiveImageSide((prev) => (prev === "front" ? "back" : "front"));
+  };
+
   return (
     <div
       className="group relative bg-white border border-duskk-200/70 rounded-none overflow-hidden transition-all duration-300 hover:shadow-lg flex flex-col justify-between"
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setActiveImageSide("front");
+      }}
     >
-      {/* Product Image Link */}
+      {/* Product Image Link & Container */}
       <div className="relative aspect-square w-full overflow-hidden bg-duskk-cream">
-        <Link href={`/product/${product.slug}`} className="block w-full h-full">
+        <Link href={`/product/${product.slug}`} className="block w-full h-full relative" tabIndex={0}>
+          {/* Front Image */}
           <img
-            src={isHovered ? secondaryImg : primaryImg}
-            alt={product.name}
-            className="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
+            src={primaryImg}
+            alt={`${product.name} - Front view`}
+            className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-500 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
+              showBackImage ? "opacity-0 pointer-events-none" : "opacity-100"
+            }`}
             loading="lazy"
             onError={(e) => {
               (e.target as HTMLImageElement).src = "/placeholder.svg";
             }}
           />
+
+          {/* Back Image (renders with smooth opacity transition if available) */}
+          {hasBackImage && (
+            <img
+              src={secondaryImg}
+              alt={`${product.name} - Alternate back view`}
+              className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-500 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
+                showBackImage ? "opacity-100" : "opacity-0 pointer-events-none"
+              }`}
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = primaryImg;
+              }}
+            />
+          )}
         </Link>
+
+        {/* Mobile / Accessible Switch View Button (if back image exists) */}
+        {hasBackImage && (
+          <button
+            type="button"
+            onClick={toggleImageSide}
+            className="absolute bottom-2.5 right-2.5 z-20 px-2 py-1 bg-white/90 hover:bg-white text-duskk-800 text-[10px] font-mono uppercase tracking-wider rounded shadow-sm border border-duskk-200 backdrop-blur-xs transition hover:text-duskk-900 focus:outline-none focus:ring-1 focus:ring-duskk-900"
+            aria-label={`Switch to ${showBackImage ? "front view" : "back view"} for ${product.name}`}
+            title="Toggle front/back view"
+          >
+            {showBackImage ? "Front" : "Back"}
+          </button>
+        )}
 
         {/* Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 z-10 pointer-events-none">
@@ -103,7 +151,7 @@ export function ProductCard({ product }: { product: any }) {
 
         {/* Sold Out Overlay */}
         {isOutOfStock && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-10">
             <span className="bg-white text-duskk-900 text-xs font-bold uppercase tracking-widest px-3 py-1.5 shadow">
               Sold Out
             </span>
@@ -112,7 +160,7 @@ export function ProductCard({ product }: { product: any }) {
 
         {/* Quick Add Button Overlay */}
         {!isOutOfStock && (
-          <div className="absolute bottom-0 inset-x-0 p-3 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 hidden sm:block">
+          <div className="absolute bottom-0 inset-x-0 p-3 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 hidden sm:block z-20">
             <button
               onClick={handleQuickAdd}
               disabled={isAdded}

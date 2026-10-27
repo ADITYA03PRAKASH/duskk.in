@@ -314,30 +314,45 @@ export async function PUT(
       }
     }
 
-    // Update primary image if provided
-    if (images && Array.isArray(images) && images.length > 0) {
-      const rawImg = images[0];
-      const imgUrl = typeof rawImg === "string" ? rawImg : (rawImg?.url || rawImg?.image_url);
-      if (imgUrl) {
-        const { data: existingImgs } = await supabaseAdmin
-          .from("product_images")
-          .select("id")
-          .eq("product_id", params.id);
+    // Update images if provided (supports frontImage, backImage, and full images array)
+    if (images !== undefined) {
+      let finalImages: Array<{ url: string; altText?: string; displayOrder?: number; isPrimary?: boolean }> = [];
 
-        if (existingImgs && existingImgs.length > 0) {
-          await supabaseAdmin
-            .from("product_images")
-            .update({ image_url: imgUrl, updated_at: new Date().toISOString() })
-            .eq("id", existingImgs[0].id);
-        } else {
-          await supabaseAdmin.from("product_images").insert({
-            product_id: params.id,
-            image_url: imgUrl,
-            alt_text: updated.title || "",
-            display_order: 0,
-            is_primary: true,
-          });
-        }
+      if (Array.isArray(images)) {
+        finalImages = images
+          .map((img: any, idx: number) => {
+            const rawUrl = typeof img === "string" ? img : (img?.url || img?.image_url);
+            if (!rawUrl || typeof rawUrl !== "string" || !rawUrl.trim()) return null;
+            return {
+              url: rawUrl.trim(),
+              altText: img.alt_text || img.altText || updated.title || "",
+              displayOrder: typeof img.display_order === "number" ? img.display_order : idx,
+              isPrimary: idx === 0,
+            };
+          })
+          .filter(Boolean) as any[];
+      }
+
+      if (finalImages.length > 0) {
+        // Fetch current images to preserve any additional gallery images beyond front/back if appropriate
+        const { data: currentImgs } = await supabaseAdmin
+          .from("product_images")
+          .select("*")
+          .eq("product_id", params.id)
+          .order("display_order", { ascending: true });
+
+        // Delete previous and insert updated order cleanly to guarantee front/back consistency
+        await supabaseAdmin.from("product_images").delete().eq("product_id", params.id);
+
+        const imgInserts = finalImages.map((img, idx) => ({
+          product_id: params.id,
+          image_url: img.url,
+          alt_text: img.altText || updated.title || "",
+          display_order: idx,
+          is_primary: idx === 0,
+        }));
+
+        await supabaseAdmin.from("product_images").insert(imgInserts);
       }
     }
 

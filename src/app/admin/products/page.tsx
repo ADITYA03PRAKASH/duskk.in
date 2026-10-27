@@ -45,7 +45,9 @@ export default function AdminProductsPage() {
   const [bestSeller, setBestSeller] = useState(false);
   const [newArrival, setNewArrival] = useState(true);
   const [imageUrl, setImageUrl] = useState("");
+  const [backImageUrl, setBackImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingBackImage, setUploadingBackImage] = useState(false);
 
   // Rating Controls State
   const [displayRating, setDisplayRating] = useState(true);
@@ -56,10 +58,14 @@ export default function AdminProductsPage() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isBack = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingImage(true);
+    if (isBack) {
+      setUploadingBackImage(true);
+    } else {
+      setUploadingImage(true);
+    }
     setErrorMsg("");
     try {
       const formData = new FormData();
@@ -71,14 +77,22 @@ export default function AdminProductsPage() {
       });
       const data = await res.json();
       if (res.ok && data.success && data.data?.url) {
-        setImageUrl(data.data.url);
+        if (isBack) {
+          setBackImageUrl(data.data.url);
+        } else {
+          setImageUrl(data.data.url);
+        }
       } else {
         setErrorMsg(data.message || "Failed to upload image file to Supabase Storage");
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to upload image file");
     } finally {
-      setUploadingImage(false);
+      if (isBack) {
+        setUploadingBackImage(false);
+      } else {
+        setUploadingImage(false);
+      }
     }
   };
 
@@ -121,6 +135,7 @@ export default function AdminProductsPage() {
     setDescription("");
     setShortDescription("");
     setImageUrl("https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1000&q=80");
+    setBackImageUrl("");
     setFeatured(false);
     setBestSeller(false);
     setNewArrival(true);
@@ -153,7 +168,21 @@ export default function AdminProductsPage() {
     setFeatured(!!p.featured);
     setBestSeller(!!p.bestSeller);
     setNewArrival(!!p.newArrival);
-    setImageUrl(getProductPrimaryImage(p, ""));
+
+    // Front image population (primary image or first image)
+    const frontImg = getProductPrimaryImage(p, "");
+    setImageUrl(frontImg);
+
+    // Back image population (second image if distinct from front image)
+    const rawImgs = p.images || p.product_images || [];
+    let backImg = "";
+    if (Array.isArray(rawImgs) && rawImgs.length > 1) {
+      const secondNorm = normalizeImageUrl(rawImgs[1], "");
+      if (secondNorm && secondNorm !== frontImg && secondNorm !== "/placeholder.svg") {
+        backImg = secondNorm;
+      }
+    }
+    setBackImageUrl(backImg);
 
     // Rating controls population
     const dispRating = p.displayRating !== undefined ? Boolean(p.displayRating) : (p.display_rating !== undefined ? Boolean(p.display_rating) : true);
@@ -214,6 +243,25 @@ export default function AdminProductsPage() {
       }
     }
 
+    // Construct images array: front image (order 0), back image (order 1), plus existing additional gallery images
+    const imageList: Array<{ url: string; altText: string }> = [];
+    if (imageUrl && imageUrl.trim()) {
+      imageList.push({ url: imageUrl.trim(), altText: name });
+    }
+    if (backImageUrl && backImageUrl.trim() && backImageUrl.trim() !== imageUrl?.trim()) {
+      imageList.push({ url: backImageUrl.trim(), altText: `${name} - Alternate view` });
+    }
+    // If editing, preserve any extra gallery images beyond index 1 that the product originally had
+    if (editingProduct && Array.isArray(editingProduct.images)) {
+      const extraImgs = editingProduct.images.slice(2);
+      for (const extra of extraImgs) {
+        const extraUrl = typeof extra === "string" ? extra : (extra?.url || extra?.image_url);
+        if (extraUrl && !imageList.some((img) => img.url === extraUrl)) {
+          imageList.push({ url: extraUrl, altText: extra.alt_text || extra.altText || name });
+        }
+      }
+    }
+
     const payload = {
       sku,
       name,
@@ -229,7 +277,7 @@ export default function AdminProductsPage() {
       featured,
       bestSeller,
       newArrival,
-      images: imageUrl ? [{ url: imageUrl, altText: name }] : [],
+      images: imageList,
       displayRating,
       ratingSource,
       manualRating: manualRating !== "" ? Number(Number(manualRating).toFixed(1)) : null,
@@ -559,52 +607,133 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-duskk-700 uppercase mb-1">Product Image</label>
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                    <label className={`cursor-pointer px-4 py-2 bg-duskk-100 hover:bg-duskk-200 text-duskk-900 border border-duskk-300 rounded font-semibold text-xs flex items-center space-x-2 transition ${uploadingImage ? "opacity-50 pointer-events-none" : ""}`}>
-                      {uploadingImage ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-duskk-900" />
-                      ) : (
-                        <Upload className="w-4 h-4 text-duskk-700" />
-                      )}
-                      <span>{uploadingImage ? "Uploading to Supabase..." : "Upload Image File"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleImageFileUpload}
-                        disabled={uploadingImage}
-                      />
+              {/* Product Images: Front & Back */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-duskk-50/50 border border-duskk-200 rounded-lg">
+                {/* Front Image */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block font-semibold text-duskk-800 uppercase text-xs">
+                      Front Image (Primary) *
                     </label>
-                    <span className="text-[11px] text-duskk-400 font-mono">PNG, JPG, WEBP (Max 5MB)</span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {imageUrl ? (
-                      <div className="w-14 h-14 rounded border border-duskk-200 overflow-hidden bg-duskk-50 flex-shrink-0 relative group">
-                        <img
-                          src={normalizeImageUrl(imageUrl)}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = "/placeholder.svg";
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-14 h-14 rounded border border-dashed border-duskk-300 bg-duskk-50 flex items-center justify-center text-duskk-400 flex-shrink-0">
-                        <ImageIcon className="w-6 h-6" />
-                      </div>
+                    {imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl("")}
+                        className="text-[10px] text-rose-600 hover:text-rose-800 uppercase font-semibold"
+                      >
+                        Clear
+                      </button>
                     )}
-                    <input
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="Or paste image URL (e.g. Supabase / Unsplash)"
-                      className="w-full px-3 py-2 border border-duskk-300 rounded text-xs"
-                    />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                      <label className={`cursor-pointer px-3 py-1.5 bg-white hover:bg-duskk-100 text-duskk-900 border border-duskk-300 rounded font-semibold text-xs flex items-center space-x-1.5 transition shadow-sm ${uploadingImage ? "opacity-50 pointer-events-none" : ""}`}>
+                        {uploadingImage ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-duskk-900" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5 text-duskk-700" />
+                        )}
+                        <span>{uploadingImage ? "Uploading..." : "Upload File"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleImageFileUpload(e, false)}
+                          disabled={uploadingImage}
+                        />
+                      </label>
+                      <span className="text-[10px] text-duskk-400 font-mono">PNG, JPG, WEBP</span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {imageUrl ? (
+                        <div className="w-14 h-14 rounded border border-duskk-200 overflow-hidden bg-white flex-shrink-0 relative group shadow-sm">
+                          <img
+                            src={normalizeImageUrl(imageUrl)}
+                            alt="Front Preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/placeholder.svg";
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 rounded border border-dashed border-duskk-300 bg-white flex items-center justify-center text-duskk-400 flex-shrink-0">
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                      )}
+                      <input
+                        type="url"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="Paste front image URL"
+                        className="w-full px-3 py-2 border border-duskk-300 bg-white rounded text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Back Image (Optional) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block font-semibold text-duskk-800 uppercase text-xs">
+                      Back Image (Optional / Hover view)
+                    </label>
+                    {backImageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setBackImageUrl("")}
+                        className="text-[10px] text-rose-600 hover:text-rose-800 uppercase font-semibold"
+                      >
+                        Remove Back Image
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                      <label className={`cursor-pointer px-3 py-1.5 bg-white hover:bg-duskk-100 text-duskk-900 border border-duskk-300 rounded font-semibold text-xs flex items-center space-x-1.5 transition shadow-sm ${uploadingBackImage ? "opacity-50 pointer-events-none" : ""}`}>
+                        {uploadingBackImage ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-duskk-900" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5 text-duskk-700" />
+                        )}
+                        <span>{uploadingBackImage ? "Uploading..." : "Upload File"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleImageFileUpload(e, true)}
+                          disabled={uploadingBackImage}
+                        />
+                      </label>
+                      <span className="text-[10px] text-duskk-400 font-mono">PNG, JPG, WEBP</span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {backImageUrl ? (
+                        <div className="w-14 h-14 rounded border border-duskk-200 overflow-hidden bg-white flex-shrink-0 relative group shadow-sm">
+                          <img
+                            src={normalizeImageUrl(backImageUrl)}
+                            alt="Back Preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/placeholder.svg";
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 rounded border border-dashed border-duskk-300 bg-white flex items-center justify-center text-duskk-400 flex-shrink-0">
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                      )}
+                      <input
+                        type="url"
+                        value={backImageUrl}
+                        onChange={(e) => setBackImageUrl(e.target.value)}
+                        placeholder="Paste back/alternate image URL"
+                        className="w-full px-3 py-2 border border-duskk-300 bg-white rounded text-xs"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
