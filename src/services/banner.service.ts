@@ -12,6 +12,7 @@ export const ALLOWED_PAGE_KEYS = [
   "rings",
   "payals",
   "bracelets",
+  "mom-s-magic",
 ] as const;
 
 export type SupportedPageKey = typeof ALLOWED_PAGE_KEYS[number];
@@ -28,6 +29,7 @@ export function normalizePageKey(rawKey: string): string {
   if (key === "necklace") return "necklaces";
   if (key === "earring") return "earrings";
   if (key === "combo") return "combos";
+  if (key === "moms-magic") return "mom-s-magic";
   return key;
 }
 
@@ -127,6 +129,20 @@ export function getDefaultPageBanners(): CategoryPageBannersMap {
       label: "COLLECTION",
       description:
         "Discover our stylish bracelet collection, featuring elegant designs that add a touch of sophistication to every look.",
+      objectPosition: "center",
+      overlayOpacity: 40,
+      updatedAt: new Date().toISOString(),
+    },
+    "mom-s-magic": {
+      pageKey: "mom-s-magic",
+      pageName: "Mom's Magic",
+      pagePath: "/category/mom-s-magic",
+      isEnabled: true,
+      imageUrl: "https://res.cloudinary.com/tqc2uioh/image/upload/f_auto,q_auto/Romantic_Jewelry_on_Marble_Pedestals",
+      title: "Mom's Magic",
+      label: "MOM'S MAGIC",
+      description:
+        "Some love stories are forever, and a mom's love is the most beautiful of them all. Explore meaningful jewellery that makes every moment with her even more special.",
       objectPosition: "center",
       overlayOpacity: 40,
       updatedAt: new Date().toISOString(),
@@ -268,7 +284,7 @@ export async function updatePageBanner(
   }
 
   // If this is a category page and imageUrl is updated, also sync categories.image_url for consistency
-  if (["earrings", "necklaces", "rings", "payals", "bracelets"].includes(key) && updates.imageUrl !== undefined) {
+  if (["earrings", "necklaces", "rings", "payals", "bracelets", "mom-s-magic"].includes(key) && updates.imageUrl !== undefined) {
     try {
       await supabaseAdmin
         .from("categories")

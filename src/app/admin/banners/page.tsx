@@ -88,6 +88,16 @@ const PAGES: PageMeta[] = [
     type: "category",
   },
   {
+    key: "mom-s-magic",
+    name: "Mom’s Magic",
+    path: "/category/mom-s-magic",
+    defaultLabel: "MOM’S MAGIC",
+    defaultTitle: "Mom’s Magic",
+    defaultDescription:
+      "Some love stories are forever, and a mom’s love is the most beautiful of them all. Explore meaningful jewellery that makes every moment with her even more special.",
+    type: "category",
+  },
+  {
     key: "combos",
     name: "Gift Sets & Combos",
     path: "/combos",
@@ -309,7 +319,7 @@ export default function AdminPageBannersPage() {
             Category & Combo Page Banners
           </h1>
           <p className="text-xs sm:text-sm text-duskk-500 mt-1 max-w-2xl">
-            Replace the black hero background with custom photography, titles, descriptions, and focal points across all 7 collection pages. Each page has independent configuration.
+            Replace the black hero background with custom photography, titles, descriptions, and focal points across collection pages. Each page has independent configuration.
           </p>
         </div>
 
