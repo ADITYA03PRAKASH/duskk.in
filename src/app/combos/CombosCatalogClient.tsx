@@ -48,7 +48,8 @@ export function CombosCatalogClient({
         (c) =>
           c.title.toLowerCase().includes(q) ||
           c.slug.toLowerCase().includes(q) ||
-          c.items?.some((i) => i.product.title.toLowerCase().includes(q))
+          (c.shortDescription && c.shortDescription.toLowerCase().includes(q)) ||
+          (c.items && c.items.some((i) => i.product.title.toLowerCase().includes(q)))
       );
     }
 
@@ -259,10 +260,10 @@ export function CombosCatalogClient({
                       </div>
                     ) : null}
 
-                    {/* Pieces Count Badge */}
+                    {/* Pieces Count / Standalone Badge */}
                     <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm text-duskk-900 text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center space-x-1 shadow-sm border border-duskk-200">
                       <Package className="w-3.5 h-3.5 text-duskk-gold" />
-                      <span>{pieceCount} Luxury Pieces</span>
+                      <span>{combo.items && combo.items.length > 0 ? `${combo.items.length} Luxury Pieces` : "Curated Gift Set"}</span>
                     </div>
 
                     {combo.isFeatured && (
@@ -285,9 +286,13 @@ export function CombosCatalogClient({
                         <p className="text-xs text-duskk-600 mt-1 line-clamp-2">
                           {combo.shortDescription}
                         </p>
+                      ) : combo.items && combo.items.length > 0 ? (
+                        <p className="text-xs text-duskk-500 mt-1 line-clamp-1">
+                          Includes: {combo.items.map((i) => i.product.title).join(" + ")}
+                        </p>
                       ) : (
                         <p className="text-xs text-duskk-500 mt-1 line-clamp-1">
-                          Includes: {combo.items?.map((i) => i.product.title).join(" + ")}
+                          Exclusive standalone jewelry gift set.
                         </p>
                       )}
                     </div>

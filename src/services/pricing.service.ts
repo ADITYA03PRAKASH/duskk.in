@@ -164,11 +164,9 @@ export async function validateAndCalculateCart(
       }
 
       const comboItemsList: any[] = combo.combo_items || [];
-      if (comboItemsList.length === 0) {
-        throw new Error(`Combo "${combo.title}" does not contain any active items.`);
-      }
+      const hasBundledProducts = comboItemsList.length > 0;
 
-      let maxCombosPossible = 999;
+      let maxCombosPossible = 99;
       let computedComponentMrp = 0;
       const comboComponents: {
         productId: string;
@@ -178,55 +176,58 @@ export async function validateAndCalculateCart(
         sku: string;
       }[] = [];
 
-      for (const ci of comboItemsList) {
-        const prod = ci.products;
-        if (!prod || prod.status !== "active") {
-          throw new Error(
-            `Product "${prod?.title || ci.product_id}" in "${combo.title}" is currently unavailable.`
-          );
+      if (hasBundledProducts) {
+        maxCombosPossible = 999;
+        for (const ci of comboItemsList) {
+          const prod = ci.products;
+          if (!prod || prod.status !== "active") {
+            throw new Error(
+              `Product "${prod?.title || ci.product_id}" in "${combo.title}" is currently unavailable.`
+            );
+          }
+
+          const compQtyPerCombo = Math.max(1, ci.quantity || 1);
+          const totalCompQtyNeeded = itemQuantity * compQtyPerCombo;
+
+          let compVariant = ci.product_variants;
+          if (!compVariant && Array.isArray(prod.product_variants)) {
+            compVariant = prod.product_variants.find((v: any) => v.is_active) || prod.product_variants[0];
+          }
+
+          let compAvailableStock = 0;
+          if (compVariant) {
+            compAvailableStock = Math.max(0, (compVariant.stock_quantity || 0) - (compVariant.reserved_quantity || 0));
+          } else {
+            compAvailableStock = 50; // fallback if untracked
+          }
+
+          const combosSupported = Math.floor(compAvailableStock / compQtyPerCombo);
+          if (combosSupported < maxCombosPossible) {
+            maxCombosPossible = combosSupported;
+          }
+
+          if (compAvailableStock < totalCompQtyNeeded) {
+            throw new Error(
+              `Insufficient stock for "${prod.title}" inside "${combo.title}". Only ${combosSupported} combos can be fulfilled.`
+            );
+          }
+
+          computedComponentMrp += Number(prod.base_price || prod.sale_price || 0) * compQtyPerCombo;
+
+          comboComponents.push({
+            productId: prod.id,
+            variantId: compVariant?.id || null,
+            quantity: compQtyPerCombo,
+            name: prod.title,
+            sku: compVariant?.sku || prod.sku,
+          });
         }
-
-        const compQtyPerCombo = Math.max(1, ci.quantity || 1);
-        const totalCompQtyNeeded = itemQuantity * compQtyPerCombo;
-
-        let compVariant = ci.product_variants;
-        if (!compVariant && Array.isArray(prod.product_variants)) {
-          compVariant = prod.product_variants.find((v: any) => v.is_active) || prod.product_variants[0];
-        }
-
-        let compAvailableStock = 0;
-        if (compVariant) {
-          compAvailableStock = Math.max(0, (compVariant.stock_quantity || 0) - (compVariant.reserved_quantity || 0));
-        } else {
-          compAvailableStock = 50; // fallback if untracked
-        }
-
-        const combosSupported = Math.floor(compAvailableStock / compQtyPerCombo);
-        if (combosSupported < maxCombosPossible) {
-          maxCombosPossible = combosSupported;
-        }
-
-        if (compAvailableStock < totalCompQtyNeeded) {
-          throw new Error(
-            `Insufficient stock for "${prod.title}" inside "${combo.title}". Only ${combosSupported} combos can be fulfilled.`
-          );
-        }
-
-        computedComponentMrp += Number(prod.base_price || prod.sale_price || 0) * compQtyPerCombo;
-
-        comboComponents.push({
-          productId: prod.id,
-          variantId: compVariant?.id || null,
-          quantity: compQtyPerCombo,
-          name: prod.title,
-          sku: compVariant?.sku || prod.sku,
-        });
       }
 
       const comboPrice = Number(combo.price);
       let comboMrp = Number(combo.mrp || 0);
       if (!comboMrp || comboMrp < comboPrice) {
-        comboMrp = computedComponentMrp > comboPrice ? computedComponentMrp : Math.round(comboPrice * 1.3);
+        comboMrp = (hasBundledProducts && computedComponentMrp > comboPrice) ? computedComponentMrp : Math.round(comboPrice * 1.3);
       }
 
       const itemSubtotal = comboPrice * itemQuantity;
@@ -244,7 +245,7 @@ export async function validateAndCalculateCart(
         isCombo: true,
         variantId: null,
         name: `[Combo] ${combo.title}`,
-        variantTitle: `${comboItemsList.length} items set`,
+        variantTitle: hasBundledProducts ? `${comboItemsList.length} items set` : "Standalone Combo Set",
         sku: `COMBO-${combo.slug.toUpperCase()}`,
         image: comboImg,
         price: comboPrice,
@@ -252,7 +253,7 @@ export async function validateAndCalculateCart(
         quantity: itemQuantity,
         subtotal: itemSubtotal,
         availableStock: maxCombosPossible,
-        comboComponents,
+        comboComponents: hasBundledProducts ? comboComponents : undefined,
       });
 
       continue;

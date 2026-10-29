@@ -72,13 +72,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json(
-        { success: false, message: "At least one product must be included in the combo." },
-        { status: 400 }
-      );
-    }
-
     const comboInput: ComboInput = {
       title: title.trim(),
       slug: slug?.trim() || undefined,
@@ -91,12 +84,14 @@ export async function POST(req: NextRequest) {
       isActive: isActive !== false,
       isFeatured: Boolean(isFeatured),
       displayOrder: Number(displayOrder || 0),
-      items: items.map((i: any, idx: number) => ({
-        productId: i.productId,
-        variantId: i.variantId || null,
-        quantity: Math.max(1, parseInt(i.quantity || 1, 10)),
-        sortOrder: i.sortOrder !== undefined ? Number(i.sortOrder) : idx,
-      })),
+      items: Array.isArray(items)
+        ? items.map((i: any, idx: number) => ({
+            productId: i.productId,
+            variantId: i.variantId || null,
+            quantity: Math.max(1, parseInt(i.quantity || 1, 10)),
+            sortOrder: i.sortOrder !== undefined ? Number(i.sortOrder) : idx,
+          }))
+        : [],
     };
 
     const newCombo = await createCombo(comboInput);

@@ -123,7 +123,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         comboId: combo.id,
         isCombo: true,
         variantId: null,
-        variantTitle: `${combo.items?.length || combo.itemsCount || 0} pieces set`,
+        variantTitle: (combo.items && combo.items.length > 0) ? `${combo.items.length} pieces set` : "Curated Gift Set",
         name: combo.title,
         sku: `COMBO-${(combo.slug || combo.id).toUpperCase()}`,
         price: Number(combo.price),

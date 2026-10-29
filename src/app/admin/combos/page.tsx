@@ -20,27 +20,12 @@ import {
   ExternalLink,
   Package,
   X,
-  Layers,
-  Percent,
   RefreshCw,
+  Percent,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 import { CustomComboSettingsTab } from "./CustomComboSettingsTab";
-
-interface ProductOption {
-  id: string;
-  title: string;
-  sku: string;
-  basePrice: number;
-  salePrice: number | null;
-  image?: string;
-  variants?: {
-    id: string;
-    title: string;
-    sku: string;
-    price?: number;
-    stockQuantity: number;
-  }[];
-}
 
 export default function AdminCombosPage() {
   const [activeTab, setActiveTab] = useState<"PREDEFINED" | "CUSTOM_BUILDER">("PREDEFINED");
@@ -59,15 +44,13 @@ export default function AdminCombosPage() {
   const [editingComboId, setEditingComboId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [uploadingPrimary, setUploadingPrimary] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [previewHoverImg, setPreviewHoverImg] = useState<string | null>(null);
 
   // Delete Confirm Modal
   const [deletingCombo, setDeletingCombo] = useState<Combo | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Available Products for Builder
-  const [availableProducts, setAvailableProducts] = useState<ProductOption[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [productSearch, setProductSearch] = useState("");
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -123,39 +106,70 @@ export default function AdminCombosPage() {
     }
   };
 
-  const fetchCatalogProducts = async () => {
-    try {
-      setLoadingProducts(true);
-      const res = await fetch("/api/admin/products");
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.data)) {
-        const formatted: ProductOption[] = data.data.map((p: any) => ({
-          id: p.id,
-          title: p.name || p.title,
-          sku: p.sku || "",
-          basePrice: Number(p.base_price || p.basePrice || 0),
-          salePrice: p.sale_price !== null ? Number(p.sale_price) : null,
-          image: p.images?.[0]?.url || p.images?.[0]?.image_url || p.image || null,
-          variants: (p.variants || []).map((v: any) => ({
-            id: v.id,
-            title: v.title || v.name,
-            sku: v.sku,
-            price: v.price_override || v.sale_price_override,
-            stockQuantity: v.stock_quantity || 0,
-          })),
-        }));
-        setAvailableProducts(formatted);
-      }
-    } catch (err) {
-      console.warn("Could not load catalog products for combo builder:", err);
-    } finally {
-      setLoadingProducts(false);
+  const handleImageFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: "primary" | "gallery"
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (type === "primary") {
+      setUploadingPrimary(true);
+    } else {
+      setUploadingGallery(true);
     }
+    setModalError(null);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("bucket", "product-images");
+      const res = await fetch("/api/storage/upload", {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.data?.url) {
+        const uploadedUrl = data.data.url;
+        if (type === "primary") {
+          setFormData((prev) => ({ ...prev, imageUrl: uploadedUrl }));
+        } else {
+          setFormData((prev) => ({
+            ...prev,
+            galleryImagesText: prev.galleryImagesText
+              ? `${prev.galleryImagesText}\n${uploadedUrl}`
+              : uploadedUrl,
+          }));
+        }
+      } else {
+        setModalError(data.message || "Failed to upload image file.");
+      }
+    } catch (err: any) {
+      setModalError(err.message || "Failed to upload image file.");
+    } finally {
+      if (type === "primary") {
+        setUploadingPrimary(false);
+      } else {
+        setUploadingGallery(false);
+      }
+      e.target.value = "";
+    }
+  };
+
+  const removeGalleryImage = (indexToRemove: number) => {
+    const urls = formData.galleryImagesText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const updated = urls.filter((_, idx) => idx !== indexToRemove);
+    setFormData((prev) => ({
+      ...prev,
+      galleryImagesText: updated.join("\n"),
+    }));
   };
 
   useEffect(() => {
     fetchCombos();
-    fetchCatalogProducts();
   }, []);
 
   // Quick Status Toggle
@@ -264,84 +278,14 @@ export default function AdminCombosPage() {
     setIsModalOpen(true);
   };
 
-  // Auto-calculated component MRP
-  const calculatedComponentMrp = useMemo(() => {
-    return formData.items.reduce((sum, item) => {
-      const price = item.basePrice || 0;
-      return sum + price * item.quantity;
-    }, 0);
-  }, [formData.items]);
-
   // Live savings preview
   const liveSavings = useMemo(() => {
     const priceNum = parseFloat(formData.price) || 0;
-    const mrpNum = parseFloat(formData.mrp) || calculatedComponentMrp || priceNum;
+    const mrpNum = parseFloat(formData.mrp) || priceNum;
     const diff = Math.max(0, mrpNum - priceNum);
     const pct = mrpNum > 0 ? Math.round((diff / mrpNum) * 100) : 0;
     return { diff, pct, mrpNum, priceNum };
-  }, [formData.price, formData.mrp, calculatedComponentMrp]);
-
-  // Add product to combo builder
-  const handleAddProductToCombo = (prod: ProductOption, variantId?: string | null) => {
-    const existingIndex = formData.items.findIndex(
-      (i) => i.productId === prod.id && (variantId ? i.variantId === variantId : true)
-    );
-
-    if (existingIndex >= 0) {
-      // Increase quantity
-      setFormData((prev) => ({
-        ...prev,
-        items: prev.items.map((i, idx) =>
-          idx === existingIndex ? { ...i, quantity: i.quantity + 1 } : i
-        ),
-      }));
-    } else {
-      // Add new
-      setFormData((prev) => ({
-        ...prev,
-        items: [
-          ...prev.items,
-          {
-            productId: prod.id,
-            variantId: variantId || null,
-            quantity: 1,
-            productTitle: prod.title,
-            productSku: prod.sku,
-            basePrice: prod.basePrice,
-            image: prod.image,
-          },
-        ],
-      }));
-    }
-
-    // Auto set MRP if not explicitly edited
-    if (!formData.mrp || Number(formData.mrp) === calculatedComponentMrp) {
-      const newMrp = calculatedComponentMrp + prod.basePrice;
-      setFormData((prev) => ({ ...prev, mrp: newMrp.toString() }));
-    }
-  };
-
-  // Remove item from combo builder
-  const handleRemoveItem = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.filter((_, idx) => idx !== index),
-    }));
-  };
-
-  // Update item quantity in builder
-  const handleUpdateItemQuantity = (index: number, quantity: number) => {
-    if (quantity <= 0) {
-      handleRemoveItem(index);
-      return;
-    }
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.map((item, idx) =>
-        idx === index ? { ...item, quantity } : item
-      ),
-    }));
-  };
+  }, [formData.price, formData.mrp]);
 
   // Submit Modal (Create or Update)
   const handleSubmitModal = async (e: React.FormEvent) => {
@@ -359,14 +303,9 @@ export default function AdminCombosPage() {
       return;
     }
 
-    const mrpNum = parseFloat(formData.mrp) || calculatedComponentMrp || priceNum;
+    const mrpNum = parseFloat(formData.mrp) || priceNum;
     if (mrpNum < priceNum) {
       setModalError("Original MRP cannot be less than the combo selling price.");
-      return;
-    }
-
-    if (formData.items.length === 0) {
-      setModalError("Please add at least one product to this combo.");
       return;
     }
 
@@ -493,14 +432,6 @@ export default function AdminCombosPage() {
     return { total, active, inactive, featured, avgSavings };
   }, [combos]);
 
-  // Filtered available products for picker
-  const filteredAvailableProducts = useMemo(() => {
-    if (!productSearch.trim()) return availableProducts.slice(0, 15);
-    const q = productSearch.toLowerCase();
-    return availableProducts
-      .filter((p) => p.title.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
-      .slice(0, 15);
-  }, [availableProducts, productSearch]);
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -739,7 +670,7 @@ export default function AdminCombosPage() {
               <thead className="bg-duskk-50 border-b border-duskk-200 text-xs font-semibold text-duskk-600 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-4">Combo</th>
-                  <th className="py-3.5 px-4">Included Products</th>
+                  <th className="py-3.5 px-4">Type / Included Products</th>
                   <th className="py-3.5 px-4">Original MRP</th>
                   <th className="py-3.5 px-4">Combo Price</th>
                   <th className="py-3.5 px-4">Savings</th>
@@ -778,17 +709,24 @@ export default function AdminCombosPage() {
                       </div>
                     </td>
 
-                    {/* Included Items Preview */}
+                    {/* Included Items Preview / Standalone Indicator */}
                     <td className="py-3.5 px-4">
                       <div className="space-y-1">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-duskk-100 text-duskk-800">
-                          <Package className="w-3 h-3 mr-1 text-duskk-gold" />
-                          {combo.itemsCount || combo.items?.length || 0} Products
-                        </span>
-                        <div className="text-[11px] text-duskk-500 line-clamp-1 max-w-[220px]">
-                          {combo.items?.map((i) => i.product.title).join(", ") ||
-                            "Included items"}
-                        </div>
+                        {combo.items && combo.items.length > 0 ? (
+                          <>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-duskk-100 text-duskk-800">
+                              <Package className="w-3 h-3 mr-1 text-duskk-gold" />
+                              {combo.items.length} Products
+                            </span>
+                            <div className="text-[11px] text-duskk-500 line-clamp-1 max-w-[220px]">
+                              {combo.items.map((i) => i.product.title).join(", ")}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                            Standalone Combo
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -993,150 +931,6 @@ export default function AdminCombosPage() {
                 </div>
               </div>
 
-              {/* PRODUCT BUNDLE BUILDER */}
-              <div className="border border-duskk-200 rounded-xl p-4 bg-duskk-50/50 space-y-4">
-                <div className="flex items-center justify-between border-b border-duskk-200 pb-3">
-                  <div>
-                    <h4 className="font-serif text-sm font-bold text-duskk-900 uppercase tracking-wider flex items-center">
-                      <Layers className="w-4 h-4 mr-1.5 text-duskk-gold" />
-                      Bundled Products ({formData.items.length})
-                    </h4>
-                    <p className="text-xs text-duskk-500">
-                      Select products from your catalog to include in this combo.
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <span className="text-xs text-duskk-500">Components Combined MRP:</span>
-                    <p className="text-sm font-bold text-duskk-900 font-mono">
-                      {formatPrice(calculatedComponentMrp)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Selected Items In Combo Table */}
-                {formData.items.length === 0 ? (
-                  <div className="p-4 text-center bg-white rounded-lg border border-dashed border-duskk-300 text-xs text-duskk-500">
-                    No products added to this combo yet. Use the catalog picker below to add items.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {formData.items.map((item, idx) => (
-                      <div
-                        key={`${item.productId}_${idx}`}
-                        className="flex items-center justify-between p-3 bg-white rounded-lg border border-duskk-200 shadow-sm"
-                      >
-                        <div className="flex items-center space-x-3 min-w-0">
-                          {item.image ? (
-                            <img
-                              src={item.image}
-                              alt=""
-                              className="w-10 h-10 object-cover rounded bg-duskk-50 border border-duskk-100 flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded bg-duskk-100 flex items-center justify-center text-duskk-400">
-                              <Package className="w-4 h-4" />
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-xs font-semibold text-duskk-900 line-clamp-1">
-                              {item.productTitle || item.productId}
-                            </p>
-                            <p className="text-[11px] text-duskk-500 font-mono">
-                              SKU: {item.productSku || "DSK-SKU"} • {formatPrice(item.basePrice || 0)} each
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-3">
-                          {/* Quantity control */}
-                          <div className="flex items-center border border-duskk-300 rounded bg-duskk-50">
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateItemQuantity(idx, item.quantity - 1)}
-                              className="px-2 py-0.5 text-xs text-duskk-600 hover:text-duskk-900"
-                            >
-                              -
-                            </button>
-                            <span className="px-2 text-xs font-bold text-duskk-900">
-                              {item.quantity}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateItemQuantity(idx, item.quantity + 1)}
-                              className="px-2 py-0.5 text-xs text-duskk-600 hover:text-duskk-900"
-                            >
-                              +
-                            </button>
-                          </div>
-
-                          <span className="font-mono text-xs font-bold text-duskk-900 min-w-[70px] text-right">
-                            {formatPrice((item.basePrice || 0) * item.quantity)}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            className="text-duskk-400 hover:text-rose-600 p-1 transition"
-                            title="Remove from combo"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Catalog Product Picker Search */}
-                <div className="pt-2">
-                  <div className="relative mb-2">
-                    <Search className="w-3.5 h-3.5 text-duskk-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Search catalog to add jewelry pieces..."
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 bg-white border border-duskk-300 rounded-lg text-xs text-duskk-900 placeholder-duskk-400 focus:outline-none focus:border-duskk-gold"
-                    />
-                  </div>
-
-                  <div className="max-h-40 overflow-y-auto divide-y divide-duskk-100 bg-white rounded-lg border border-duskk-200">
-                    {loadingProducts ? (
-                      <p className="p-3 text-center text-xs text-duskk-400">Loading catalog...</p>
-                    ) : filteredAvailableProducts.length === 0 ? (
-                      <p className="p-3 text-center text-xs text-duskk-400">No matching products found.</p>
-                    ) : (
-                      filteredAvailableProducts.map((p) => (
-                        <div
-                          key={p.id}
-                          className="p-2 flex items-center justify-between text-xs hover:bg-duskk-50 transition"
-                        >
-                          <div className="flex items-center space-x-2 min-w-0 pr-2">
-                            <span className="font-medium text-duskk-900 line-clamp-1">
-                              {p.title}
-                            </span>
-                            <span className="text-duskk-400 font-mono text-[10px]">
-                              ({p.sku})
-                            </span>
-                            <span className="text-duskk-700 font-semibold font-mono text-[11px]">
-                              {formatPrice(p.basePrice)}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleAddProductToCombo(p)}
-                            className="px-2.5 py-1 bg-duskk-100 hover:bg-duskk-900 hover:text-white text-duskk-800 rounded font-medium text-[11px] transition"
-                          >
-                            + Add
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-
               {/* PRICING & SAVINGS ROW */}
               <div className="bg-duskk-gold/10 border border-duskk-gold/30 rounded-xl p-4 space-y-4">
                 <h4 className="font-serif text-xs font-bold text-duskk-900 uppercase tracking-wider flex items-center">
@@ -1148,17 +942,17 @@ export default function AdminCombosPage() {
                   {/* MRP */}
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-duskk-800 uppercase tracking-wider">
-                      Original Combined MRP (₹) *
+                      Original MRP (₹) *
                     </label>
                     <input
                       type="number"
-                      placeholder={calculatedComponentMrp.toString()}
+                      placeholder="e.g. 2999"
                       value={formData.mrp}
                       onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
                       className="w-full px-3 py-2 bg-white border border-duskk-300 rounded-lg text-sm font-mono text-duskk-900 focus:outline-none focus:border-duskk-gold"
                     />
                     <p className="text-[10px] text-duskk-500">
-                      Calculated component total: {formatPrice(calculatedComponentMrp)}
+                      Set higher than selling price to show customer savings.
                     </p>
                   </div>
 
@@ -1193,42 +987,145 @@ export default function AdminCombosPage() {
               </div>
 
               {/* MEDIA & IMAGES */}
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-duskk-800 uppercase tracking-wider">
-                    Primary Image URL
-                  </label>
+              <div className="space-y-4 border border-duskk-200 rounded-xl p-4 bg-duskk-50/40">
+                {/* Primary Image */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-duskk-800 uppercase tracking-wider">
+                      Primary Image
+                    </label>
+                    <label className={`cursor-pointer px-3 py-1 bg-white hover:bg-duskk-100 text-duskk-900 border border-duskk-300 rounded font-semibold text-xs flex items-center space-x-1.5 transition shadow-sm ${uploadingPrimary ? "opacity-50 pointer-events-none" : ""}`}>
+                      {uploadingPrimary ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-duskk-900" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5 text-duskk-700" />
+                      )}
+                      <span>{uploadingPrimary ? "Uploading..." : "Upload Image"}</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => handleImageFileUpload(e, "primary")}
+                        disabled={uploadingPrimary}
+                      />
+                    </label>
+                  </div>
                   <input
                     type="url"
-                    placeholder="https://... / image URL"
+                    placeholder="https://... / primary image URL"
                     value={formData.imageUrl}
                     onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-duskk-50 border border-duskk-300 rounded-lg text-sm text-duskk-900 focus:outline-none focus:border-duskk-gold focus:bg-white"
+                    className="w-full px-3.5 py-2 bg-white border border-duskk-300 rounded-lg text-sm text-duskk-900 focus:outline-none focus:border-duskk-gold"
                   />
                   {formData.imageUrl && (
-                    <div className="mt-2 flex items-center space-x-2">
-                      <img
-                        src={formData.imageUrl}
-                        alt="Preview"
-                        className="w-16 h-16 object-cover rounded-lg border border-duskk-200"
-                        onError={(e) => (e.currentTarget.style.display = "none")}
-                      />
-                      <span className="text-xs text-duskk-500">Primary preview</span>
+                    <div className="flex items-center space-x-3 pt-1">
+                      <div
+                        className="relative group/prim cursor-pointer"
+                        onMouseEnter={() => setPreviewHoverImg(formData.imageUrl)}
+                        onMouseLeave={() => setPreviewHoverImg(null)}
+                      >
+                        <img
+                          src={formData.imageUrl}
+                          alt="Primary preview"
+                          className="w-16 h-16 object-cover rounded-lg border border-duskk-200 bg-white shadow-sm"
+                          onError={(e) => (e.currentTarget.style.display = "none")}
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/prim:opacity-100 transition rounded-lg flex items-center justify-center text-white text-[10px] font-medium">
+                          Preview
+                        </div>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-medium text-duskk-700">Primary Cover Thumbnail</span>
+                        <p className="text-[11px] text-duskk-400">Hover to preview enlarged</p>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-duskk-800 uppercase tracking-wider">
-                    Additional Gallery Images (One URL per line)
-                  </label>
+                {/* Additional Gallery Images */}
+                <div className="space-y-2 pt-3 border-t border-duskk-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-duskk-800 uppercase tracking-wider">
+                      Additional Gallery Images
+                    </label>
+                    <label className={`cursor-pointer px-3 py-1 bg-white hover:bg-duskk-100 text-duskk-900 border border-duskk-300 rounded font-semibold text-xs flex items-center space-x-1.5 transition shadow-sm ${uploadingGallery ? "opacity-50 pointer-events-none" : ""}`}>
+                      {uploadingGallery ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-duskk-900" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5 text-duskk-700" />
+                      )}
+                      <span>{uploadingGallery ? "Uploading..." : "Upload to Gallery"}</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => handleImageFileUpload(e, "gallery")}
+                        disabled={uploadingGallery}
+                      />
+                    </label>
+                  </div>
                   <textarea
-                    rows={2}
-                    placeholder="https://images.../angle2.jpg&#10;https://images.../angle3.jpg"
+                    rows={3}
+                    placeholder="https://images.../angle2.jpg&#10;https://images.../angle3.jpg (One URL per line)"
                     value={formData.galleryImagesText}
                     onChange={(e) => setFormData({ ...formData, galleryImagesText: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-duskk-50 border border-duskk-300 rounded-lg text-xs font-mono text-duskk-900 focus:outline-none focus:border-duskk-gold focus:bg-white"
+                    className="w-full px-3.5 py-2 bg-white border border-duskk-300 rounded-lg text-xs font-mono text-duskk-900 focus:outline-none focus:border-duskk-gold"
                   />
+
+                  {/* Individual Gallery Image Thumbnails */}
+                  {formData.galleryImagesText.split("\n").map((s) => s.trim()).filter(Boolean).length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-[11px] font-semibold text-duskk-600 mb-1.5 uppercase tracking-wider">
+                        Gallery Thumbnails ({formData.galleryImagesText.split("\n").map((s) => s.trim()).filter(Boolean).length}):
+                      </p>
+                      <div className="flex flex-wrap gap-2.5">
+                        {formData.galleryImagesText
+                          .split("\n")
+                          .map((s) => s.trim())
+                          .filter(Boolean)
+                          .map((url, gIdx) => (
+                            <div
+                              key={`${url}_${gIdx}`}
+                              className="relative group/thumb border border-duskk-200 rounded-lg overflow-hidden bg-white shadow-sm"
+                            >
+                              <img
+                                src={url}
+                                alt={`Gallery ${gIdx + 1}`}
+                                className="w-14 h-14 object-cover cursor-pointer hover:opacity-90 transition"
+                                onMouseEnter={() => setPreviewHoverImg(url)}
+                                onMouseLeave={() => setPreviewHoverImg(null)}
+                                onError={(e) => (e.currentTarget.style.display = "none")}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeGalleryImage(gIdx)}
+                                className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-rose-600 text-white rounded-full p-0.5 opacity-0 group-hover/thumb:opacity-100 transition"
+                                title="Remove from gallery"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                      <p className="text-[10px] text-duskk-400 mt-1">
+                        Hover over any thumbnail to preview enlarged, or click the X to remove it.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Floating Large Hover Preview */}
+                  {previewHoverImg && (
+                    <div className="p-2 bg-white rounded-xl border border-duskk-300 shadow-xl inline-block max-w-[240px] animate-fade-in">
+                      <img
+                        src={previewHoverImg}
+                        alt="Large preview"
+                        className="w-full h-44 object-cover rounded-lg bg-duskk-50"
+                      />
+                      <p className="text-[10px] text-center text-duskk-500 font-mono mt-1.5 truncate">
+                        {previewHoverImg}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

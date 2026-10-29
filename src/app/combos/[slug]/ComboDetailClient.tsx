@@ -55,7 +55,8 @@ export function ComboDetailClient({ combo }: { combo: Combo }) {
     }
   };
 
-  const itemsCount = combo.items?.length || combo.itemsCount || 2;
+  const hasItems = Boolean(combo.items && combo.items.length > 0);
+  const itemsCount = combo.items?.length || combo.itemsCount || 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -279,62 +280,64 @@ export function ComboDetailClient({ combo }: { combo: Combo }) {
         </div>
       </div>
 
-      {/* "WHAT'S IN THIS GIFT SET" Component Breakdown Section */}
-      <section className="bg-white rounded-2xl border border-duskk-200 p-6 sm:p-8 shadow-sm space-y-6">
-        <div className="border-b border-duskk-100 pb-4">
-          <div className="flex items-center space-x-2 text-duskk-gold mb-1">
-            <Package className="w-4 h-4" />
-            <span className="text-xs uppercase font-mono tracking-widest font-semibold">
-              COMPLETE SET BREAKDOWN
-            </span>
+      {/* "WHAT'S IN THIS GIFT SET" Component Breakdown Section (for bundled combos) */}
+      {hasItems && (
+        <section className="bg-white rounded-2xl border border-duskk-200 p-6 sm:p-8 shadow-sm space-y-6">
+          <div className="border-b border-duskk-100 pb-4">
+            <div className="flex items-center space-x-2 text-duskk-gold mb-1">
+              <Package className="w-4 h-4" />
+              <span className="text-xs uppercase font-mono tracking-widest font-semibold">
+                COMPLETE SET BREAKDOWN
+              </span>
+            </div>
+            <h2 className="font-serif text-2xl font-bold text-duskk-900">
+              What's Included in This Set ({itemsCount} Pieces)
+            </h2>
+            <p className="text-xs text-duskk-500 mt-1">
+              Every item in this combo is an authentic individual DUSKK creation, packaged together in our signature gift box.
+            </p>
           </div>
-          <h2 className="font-serif text-2xl font-bold text-duskk-900">
-            What's Included in This Set ({itemsCount} Pieces)
-          </h2>
-          <p className="text-xs text-duskk-500 mt-1">
-            Every item in this combo is an authentic individual DUSKK creation, packaged together in our signature gift box.
-          </p>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {combo.items?.map((item, idx) => (
-            <div
-              key={item.id || idx}
-              className="flex items-center space-x-4 p-4 rounded-xl border border-duskk-200/90 bg-duskk-50/50 hover:bg-duskk-50 transition"
-            >
-              <img
-                src={
-                  item.product.image ||
-                  "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=200&q=80"
-                }
-                alt={item.product.title}
-                className="w-20 h-20 object-cover rounded-lg bg-white border border-duskk-200 flex-shrink-0"
-              />
-              <div className="flex-1 min-w-0 space-y-1">
-                <span className="inline-block px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider bg-duskk-200 text-duskk-800 rounded">
-                  Piece {idx + 1} of {itemsCount} • Qty: {item.quantity}
-                </span>
-                <h4 className="text-sm font-semibold text-duskk-900 line-clamp-1">
-                  {item.product.title}
-                </h4>
-                {item.variant && (
-                  <p className="text-xs text-duskk-600 font-medium">
-                    Variant: {item.variant.title}
-                  </p>
-                )}
-                <div className="flex items-baseline space-x-2 text-xs">
-                  <span className="font-bold text-duskk-900 font-mono">
-                    Catalog Price: {formatPrice(item.product.basePrice)}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {combo.items?.map((item, idx) => (
+              <div
+                key={item.id || idx}
+                className="flex items-center space-x-4 p-4 rounded-xl border border-duskk-200/90 bg-duskk-50/50 hover:bg-duskk-50 transition"
+              >
+                <img
+                  src={
+                    item.product.image ||
+                    "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=200&q=80"
+                  }
+                  alt={item.product.title}
+                  className="w-20 h-20 object-cover rounded-lg bg-white border border-duskk-200 flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <span className="inline-block px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider bg-duskk-200 text-duskk-800 rounded">
+                    Piece {idx + 1} of {itemsCount} • Qty: {item.quantity}
                   </span>
-                  <span className="text-duskk-400 font-mono text-[10px]">
-                    SKU: {item.product.sku}
-                  </span>
+                  <h4 className="text-sm font-semibold text-duskk-900 line-clamp-1">
+                    {item.product.title}
+                  </h4>
+                  {item.variant && (
+                    <p className="text-xs text-duskk-600 font-medium">
+                      Variant: {item.variant.title}
+                    </p>
+                  )}
+                  <div className="flex items-baseline space-x-2 text-xs">
+                    <span className="font-bold text-duskk-900 font-mono">
+                      Catalog Price: {formatPrice(item.product.basePrice)}
+                    </span>
+                    <span className="text-duskk-400 font-mono text-[10px]">
+                      SKU: {item.product.sku}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Full Description & Styling Guide */}
       {combo.description && (
