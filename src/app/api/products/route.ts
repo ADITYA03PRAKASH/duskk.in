@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
       sort,
       limit,
       page,
+      includeCount: true,
     });
 
     return NextResponse.json({

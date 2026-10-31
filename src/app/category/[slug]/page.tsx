@@ -30,6 +30,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   }
 
   const productsResult = await getProducts({
+    categoryId: category.id,
     category: slug,
     sort: sort || "recommended",
     limit: 60,

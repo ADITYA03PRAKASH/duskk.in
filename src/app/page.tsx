@@ -4,6 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
 import { getProducts, getCategories, getBanners } from "@/services/catalog.service";
+import { optimizeImageUrl } from "@/lib/utils";
 import { getPublicTestimonials, getTestimonialSectionSettings } from "@/services/testimonials.service";
 import { getPromotionalCoupon } from "@/services/pricing.service";
 import { getPublishedCombos, getCustomComboSettings } from "@/services/combo.service";
@@ -86,14 +87,17 @@ export default async function HomePage() {
                 >
                   <div className="relative aspect-square w-full overflow-hidden bg-duskk-100 mb-3">
                     <img
-                      src={
+                      src={optimizeImageUrl(
                         cat.image_url ||
                         cat.image ||
                         (cat.slug === "earrings"
                           ? "https://i.pinimg.com/736x/f3/6c/23/f36c237d407964256dbd7ca71a760284.jpg"
-                          : "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80")
-                      }
+                          : "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80"),
+                        400
+                      )}
                       alt={cat.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     />
                   </div>
@@ -215,8 +219,10 @@ export default async function HomePage() {
               <div className="w-full max-w-[280px] sm:max-w-[290px] md:w-[290px] lg:w-[300px] flex-shrink-0">
                 <div className="relative w-full h-[350px] sm:h-[360px] overflow-hidden shadow-xl border border-duskk-200/80">
                   <img
-                    src="https://i.pinimg.com/1200x/5a/bd/84/5abd84ac52a6b23b4d28f69d9252214f.jpg"
+                    src="https://i.pinimg.com/736x/5a/bd/84/5abd84ac52a6b23b4d28f69d9252214f.jpg"
                     alt="DUSKK Craftsmanship — Crafted For The Modern Muse"
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover object-center transition-transform duration-700 hover:scale-105"
                   />
                 </div>

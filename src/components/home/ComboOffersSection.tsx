@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, optimizeImageUrl } from "@/lib/utils";
 import { Combo, CustomComboSettings } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { Gift, ArrowRight, Check, ShoppingBag, Sparkles, Package, Layers } from "lucide-react";
@@ -129,12 +129,15 @@ export function ComboOffersSection({
                 <div className="relative aspect-square w-full overflow-hidden bg-duskk-950">
                   <Link href={`/combos/${combo.slug}`}>
                     <img
-                      src={
+                      src={optimizeImageUrl(
                         combo.imageUrl ||
                         (combo.galleryImages && combo.galleryImages[0]) ||
-                        "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=500&q=80"
-                      }
+                        "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=500&q=80",
+                        500
+                      )}
                       alt={combo.title}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   </Link>

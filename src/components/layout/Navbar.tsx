@@ -8,6 +8,126 @@ import { ShoppingBag, Search, Menu, X, Compass, Sparkles } from "lucide-react";
 import { D_LOGO_SRC } from "@/lib/logo";
 import type { PublicPromotionalCoupon } from "@/services/pricing.service";
 
+// Module-level shared cache & in-flight promises to eliminate duplicate/repeated Navbar fetches
+interface NavCategoryItem {
+  name: string;
+  slug: string;
+}
+
+const CATEGORIES_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SHIPPING_TTL_MS = 1 * 60 * 1000;   // 1 minute
+const COUPON_TTL_MS = 1 * 60 * 1000;     // 1 minute
+
+let cachedShippingAnnouncement: string | null = null;
+let shippingAnnouncementExpiry: number = 0;
+let shippingAnnouncementPromise: Promise<string | null> | null = null;
+
+let cachedPromoCoupon: PublicPromotionalCoupon | null = null;
+let promoCouponExpiry: number = 0;
+let promoCouponPromise: Promise<PublicPromotionalCoupon | null> | null = null;
+let latestSuppliedPromoTimestamp: number = 0;
+
+let cachedCategories: NavCategoryItem[] | null = null;
+let categoriesExpiry: number = 0;
+let categoriesPromise: Promise<NavCategoryItem[] | null> | null = null;
+
+function fetchShippingAnnouncementCached(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedShippingAnnouncement !== null && now < shippingAnnouncementExpiry) {
+    return Promise.resolve(cachedShippingAnnouncement);
+  }
+  if (!shippingAnnouncementPromise) {
+    shippingAnnouncementPromise = fetch("/api/shipping/config")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((resData) => {
+        if (resData.success && resData.data?.announcementText) {
+          cachedShippingAnnouncement = resData.data.announcementText;
+          shippingAnnouncementExpiry = Date.now() + SHIPPING_TTL_MS;
+          return cachedShippingAnnouncement;
+        }
+        return null;
+      })
+      .catch((err) => {
+        console.warn("Failed to load dynamic shipping announcement:", err);
+        return null;
+      })
+      .finally(() => {
+        shippingAnnouncementPromise = null;
+      });
+  }
+  return shippingAnnouncementPromise;
+}
+
+function fetchPromoCouponCached(): Promise<PublicPromotionalCoupon | null> {
+  const now = Date.now();
+  if (cachedPromoCoupon !== null && now < promoCouponExpiry) {
+    return Promise.resolve(cachedPromoCoupon);
+  }
+  if (!promoCouponPromise) {
+    const requestStart = Date.now();
+    promoCouponPromise = fetch("/api/promotions/coupon")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((resData) => {
+        if (resData.success) {
+          // Guard: do not overwrite if a newer initialPromoCoupon was supplied while request was in-flight
+          if (requestStart >= latestSuppliedPromoTimestamp) {
+            cachedPromoCoupon = resData.data;
+            promoCouponExpiry = Date.now() + COUPON_TTL_MS;
+          }
+          return cachedPromoCoupon;
+        }
+        return null;
+      })
+      .catch((err) => {
+        console.error("Failed to load promotional coupon:", err);
+        return null;
+      })
+      .finally(() => {
+        promoCouponPromise = null;
+      });
+  }
+  return promoCouponPromise;
+}
+
+function fetchCategoriesCached(): Promise<NavCategoryItem[] | null> {
+  const now = Date.now();
+  if (cachedCategories !== null && now < categoriesExpiry) {
+    return Promise.resolve(cachedCategories);
+  }
+  if (!categoriesPromise) {
+    categoriesPromise = fetch("/api/categories")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((resData) => {
+        if (resData.success && Array.isArray(resData.data) && resData.data.length > 0) {
+          const mapped: NavCategoryItem[] = resData.data
+            .filter((c: any) => c.is_active !== false)
+            .map((c: any) => ({ name: c.name.toUpperCase(), slug: c.slug }));
+          cachedCategories = mapped;
+          categoriesExpiry = Date.now() + CATEGORIES_TTL_MS;
+          return cachedCategories;
+        }
+        return null;
+      })
+      .catch((err) => {
+        console.warn("Failed to load categories for nav:", err);
+        return null;
+      })
+      .finally(() => {
+        categoriesPromise = null;
+      });
+  }
+  return categoriesPromise;
+}
+
 interface NavbarProps {
   initialPromoCoupon?: PublicPromotionalCoupon | null;
 }
@@ -18,49 +138,85 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
-  const [promoCoupon, setPromoCoupon] = useState<PublicPromotionalCoupon | null>(
-    initialPromoCoupon ?? null
-  );
+  const [promoCoupon, setPromoCoupon] = useState<PublicPromotionalCoupon | null>(() => {
+    if (initialPromoCoupon !== undefined) {
+      latestSuppliedPromoTimestamp = Date.now();
+      if (initialPromoCoupon) {
+        cachedPromoCoupon = initialPromoCoupon;
+        promoCouponExpiry = Date.now() + COUPON_TTL_MS;
+      } else {
+        // Explicit null supplied: clear cached coupon so expired coupon is not reused
+        cachedPromoCoupon = null;
+        promoCouponExpiry = 0;
+      }
+      return initialPromoCoupon;
+    }
+    const now = Date.now();
+    return now < promoCouponExpiry ? cachedPromoCoupon : null;
+  });
   const [shippingAnnouncement, setShippingAnnouncement] = useState<string>(
-    "Complimentary Express Shipping Across India On Orders Above ₹999"
+    () => {
+      const now = Date.now();
+      return (now < shippingAnnouncementExpiry && cachedShippingAnnouncement)
+        ? cachedShippingAnnouncement
+        : "Complimentary Express Shipping Across India On Orders Above ₹999";
+    }
   );
+  const [categories, setCategories] = useState<NavCategoryItem[]>(() => {
+    const now = Date.now();
+    return (now < categoriesExpiry && cachedCategories) ? cachedCategories : [];
+  });
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     let isMounted = true;
-    fetch("/api/shipping/config")
-      .then((res) => res.json())
-      .then((resData) => {
-        if (isMounted && resData.success && resData.data?.announcementText) {
-          setShippingAnnouncement(resData.data.announcementText);
-        }
-      })
-      .catch((err) => {
-        console.warn("Failed to load dynamic shipping announcement:", err);
-      });
+    fetchShippingAnnouncementCached().then((text) => {
+      if (isMounted && text) {
+        setShippingAnnouncement(text);
+      }
+    });
     return () => {
       isMounted = false;
     };
   }, []);
 
   useEffect(() => {
-    if (initialPromoCoupon !== undefined) return;
+    if (initialPromoCoupon !== undefined) {
+      latestSuppliedPromoTimestamp = Date.now();
+      if (initialPromoCoupon) {
+        cachedPromoCoupon = initialPromoCoupon;
+        promoCouponExpiry = Date.now() + COUPON_TTL_MS;
+      } else {
+        // Explicit null supplied: clear cached coupon
+        cachedPromoCoupon = null;
+        promoCouponExpiry = 0;
+      }
+      setPromoCoupon(initialPromoCoupon);
+      return;
+    }
     let isMounted = true;
-    fetch("/api/promotions/coupon")
-      .then((res) => res.json())
-      .then((resData) => {
-        if (isMounted && resData.success) {
-          setPromoCoupon(resData.data);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load promotional coupon:", err);
-      });
+    fetchPromoCouponCached().then((coupon) => {
+      if (isMounted && coupon) {
+        setPromoCoupon(coupon);
+      }
+    });
     return () => {
       isMounted = false;
     };
   }, [initialPromoCoupon]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchCategoriesCached().then((cats) => {
+      if (isMounted && cats && cats.length > 0) {
+        setCategories(cats);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -69,7 +225,6 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
 
   // Close drawer & search on route change
   useEffect(() => {
@@ -96,29 +251,6 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
       setIsSearchOpen(false);
     }
   };
-
-  const [categories, setCategories] = useState<{ name: string; slug: string }[]>([]);
-
-  useEffect(() => {
-    let isMounted = true;
-    fetch("/api/categories")
-      .then((res) => res.json())
-      .then((resData) => {
-        if (isMounted && resData.success && Array.isArray(resData.data) && resData.data.length > 0) {
-          setCategories(
-            resData.data
-              .filter((c: any) => c.is_active !== false)
-              .map((c: any) => ({ name: c.name.toUpperCase(), slug: c.slug }))
-          );
-        }
-      })
-      .catch((err) => {
-        console.warn("Failed to load categories for nav:", err);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const allNavLinks = [
     { name: "SHOP ALL", href: "/shop" },

@@ -37,8 +37,12 @@ export default async function ProductDetailPage({ params }: { params: { slug: st
   const categorySlug = Array.isArray(product.category)
     ? product.category[0]?.slug
     : (product.category as any)?.slug || null;
+  const categoryId = Array.isArray(product.category)
+    ? product.category[0]?.id
+    : (product.category as any)?.id || null;
 
   const relatedResult = await getProducts({
+    categoryId: categoryId,
     category: categorySlug,
     limit: 5,
   });

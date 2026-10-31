@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
-import { formatPrice, getProductPrimaryImage, normalizeImageUrl } from "@/lib/utils";
+import { formatPrice, getProductPrimaryImage, normalizeImageUrl, optimizeImageUrl } from "@/lib/utils";
 import { Star, ShoppingBag, Check } from "lucide-react";
 
 export interface ProductCardProps {
@@ -35,11 +35,13 @@ export function ProductCard({ product }: { product: any }) {
   const [isAdded, setIsAdded] = useState(false);
 
   const primaryImg = getProductPrimaryImage(product, "/placeholder.svg");
+  const optimizedPrimaryImg = optimizeImageUrl(primaryImg, 500);
 
   const secondaryImg =
     normalizeImageUrl(product.secondaryImage, "") ||
     normalizeImageUrl(product.images?.[1], "") ||
     primaryImg;
+  const optimizedSecondaryImg = optimizeImageUrl(secondaryImg, 500);
 
   const isOutOfStock = product.stockQuantity <= 0;
 
@@ -90,12 +92,13 @@ export function ProductCard({ product }: { product: any }) {
         <Link href={`/product/${product.slug}`} className="block w-full h-full relative" tabIndex={0}>
           {/* Front Image */}
           <img
-            src={primaryImg}
+            src={optimizedPrimaryImg}
             alt={`${product.name} - Front view`}
             className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-500 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
               showBackImage ? "opacity-0 pointer-events-none" : "opacity-100"
             }`}
             loading="lazy"
+            decoding="async"
             onError={(e) => {
               (e.target as HTMLImageElement).src = "/placeholder.svg";
             }}
@@ -104,12 +107,13 @@ export function ProductCard({ product }: { product: any }) {
           {/* Back Image (renders with smooth opacity transition if available) */}
           {hasBackImage && (
             <img
-              src={secondaryImg}
+              src={optimizedSecondaryImg}
               alt={`${product.name} - Alternate back view`}
               className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-500 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
                 showBackImage ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
               loading="lazy"
+              decoding="async"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = primaryImg;
               }}

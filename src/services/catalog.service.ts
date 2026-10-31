@@ -3,6 +3,7 @@ import { normalizeImageUrl } from "@/lib/utils";
 
 export interface ProductQueryParams {
   category?: string | null;
+  categoryId?: string | null;
   subcategory?: string | null;
   search?: string | null;
   featured?: boolean;
@@ -13,6 +14,7 @@ export interface ProductQueryParams {
   sort?: string;
   limit?: number;
   page?: number;
+  includeCount?: boolean;
 }
 
 export async function withTimeout<T>(promise: PromiseLike<T>, ms: number = 8000): Promise<T> {
@@ -365,6 +367,7 @@ export async function getProducts(params: ProductQueryParams) {
   try {
     const {
       category,
+      categoryId,
       subcategory,
       search,
       featured,
@@ -375,7 +378,10 @@ export async function getProducts(params: ProductQueryParams) {
       sort = "recommended",
       limit = 40,
       page = 1,
+      includeCount = false,
     } = params;
+
+    const selectOptions = includeCount ? { count: "exact" as const } : undefined;
 
     let query = supabaseAdmin
       .from("products")
@@ -425,10 +431,12 @@ export async function getProducts(params: ProductQueryParams) {
           rating,
           status
         )
-      `, { count: "exact" })
+      `, selectOptions)
       .eq("status", "active");
 
-    if (category) {
+    if (categoryId) {
+      query = query.eq("category_id", categoryId);
+    } else if (category) {
       const categorySlug = category.toLowerCase() === "payal" ? "payals" : category;
       try {
         const { data: catData } = await withTimeout(

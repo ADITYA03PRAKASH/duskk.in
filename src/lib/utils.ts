@@ -145,3 +145,47 @@ export function getProductPrimaryImage(product: any, fallback: string = "/placeh
   return fallback;
 }
 
+/**
+ * Automatically transforms remote image URLs to responsive, compressed dimensions
+ * without reducing visual quality. Supports Cloudinary, Unsplash, and Pinterest.
+ */
+export function optimizeImageUrl(rawUrl: any, width: number = 600): string {
+  if (!rawUrl || typeof rawUrl !== "string") return typeof rawUrl === "string" ? rawUrl : "";
+  const clean = rawUrl.trim();
+  if (!clean || clean.startsWith("/") || clean.startsWith("data:")) return clean;
+
+  // 1. Cloudinary: insert f_auto,q_auto,w_<width>,c_limit into /image/upload/
+  if (clean.includes("res.cloudinary.com") && clean.includes("/image/upload/")) {
+    if (clean.includes("/upload/f_auto,q_auto/")) {
+      return clean.replace("/upload/f_auto,q_auto/", `/upload/f_auto,q_auto,w_${width},c_limit/`);
+    }
+    if (!clean.includes("/upload/f_auto")) {
+      return clean.replace("/image/upload/", `/image/upload/f_auto,q_auto,w_${width},c_limit/`);
+    }
+  }
+
+  // 2. Unsplash: optimize width, format, and quality parameters
+  if (clean.includes("images.unsplash.com")) {
+    try {
+      const u = new URL(clean);
+      u.searchParams.set("w", String(width));
+      u.searchParams.set("auto", "format");
+      u.searchParams.set("q", "80");
+      return u.toString();
+    } catch {
+      return clean;
+    }
+  }
+
+  // 3. Pinterest (i.pinimg.com): use 474x for cards/thumbnails
+  if (clean.includes("i.pinimg.com")) {
+    if (width <= 480 && clean.includes("/736x/")) {
+      return clean.replace("/736x/", "/474x/");
+    }
+    if (width <= 480 && clean.includes("/1200x/")) {
+      return clean.replace("/1200x/", "/736x/");
+    }
+  }
+
+  return clean;
+}

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { PageBannerConfig } from "@/types";
-import { normalizeImageUrl } from "@/lib/utils";
+import { normalizeImageUrl, optimizeImageUrl } from "@/lib/utils";
 
 interface CategoryPageBannerProps {
   banner?: PageBannerConfig | null;
@@ -63,8 +63,11 @@ export function CategoryPageBanner({
       {imageUrl && (
         <div className="absolute inset-0 w-full h-full">
           <img
-            src={normalizeImageUrl(imageUrl)}
+            src={optimizeImageUrl(normalizeImageUrl(imageUrl), 1400)}
             alt={title}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
             className="w-full h-full object-cover transition-opacity duration-500"
             style={{ objectPosition }}
             onError={(e) => {

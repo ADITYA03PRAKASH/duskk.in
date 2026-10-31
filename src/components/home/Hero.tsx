@@ -71,6 +71,7 @@ export function Hero({
             loop
             playsInline
             controls={false}
+            preload="metadata"
             onError={() => setVideoError(true)}
             className="absolute inset-0 w-full h-full object-cover object-center"
           >

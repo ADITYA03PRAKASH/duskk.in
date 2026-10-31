@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useCart } from "@/context/CartContext";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, normalizeImageUrl, optimizeImageUrl } from "@/lib/utils";
 import { ShoppingBag, Plus, Minus, Trash2, ArrowRight, ShieldCheck, Truck, Tag } from "lucide-react";
 
 export default function CartPage() {
@@ -189,8 +189,10 @@ export default function CartPage() {
                   {items.map((item) => (
                     <div key={item.productId} className="py-4 flex space-x-4 items-center">
                       <img
-                        src={item.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=300&q=80"}
+                        src={optimizeImageUrl(normalizeImageUrl(item.image || "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=300&q=80"), 160)}
                         alt={item.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-20 h-20 object-cover bg-duskk-50 rounded border border-duskk-100 flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">

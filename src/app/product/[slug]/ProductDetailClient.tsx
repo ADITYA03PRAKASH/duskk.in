@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
-import { formatPrice, normalizeImageUrl, getProductPrimaryImage } from "@/lib/utils";
+import { formatPrice, normalizeImageUrl, getProductPrimaryImage, optimizeImageUrl } from "@/lib/utils";
 import {
   Star,
   ShoppingBag,
@@ -153,8 +153,10 @@ export function ProductDetailClient({ product }: { product: any }) {
                 }`}
               >
                 <img
-                  src={img.url}
+                  src={optimizeImageUrl(img.url, 160)}
                   alt={img.altText || product.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = "/placeholder.svg";
@@ -168,8 +170,10 @@ export function ProductDetailClient({ product }: { product: any }) {
         {/* Main Display Image */}
         <div className="flex-1 bg-white border border-duskk-200/80 overflow-hidden relative aspect-square sm:aspect-4/5 shadow-sm">
           <img
-            src={currentImage.url}
+            src={optimizeImageUrl(currentImage.url, 800)}
             alt={currentImage.altText || product.name}
+            fetchPriority="high"
+            decoding="async"
             className="w-full h-full object-cover object-center"
             onError={(e) => {
               (e.target as HTMLImageElement).src = "/placeholder.svg";

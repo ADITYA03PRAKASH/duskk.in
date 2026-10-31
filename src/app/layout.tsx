@@ -85,6 +85,12 @@ export default function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://res.cloudinary.com" />
+        <link rel="preconnect" href="https://images.unsplash.com" />
+      </head>
       <body className="min-h-screen flex flex-col antialiased">
         <script
           type="application/ld+json"

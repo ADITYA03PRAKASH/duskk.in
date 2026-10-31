@@ -9,10 +9,17 @@ export async function GET() {
     const settings = await getShippingSettings();
     const publicConfig = getPublicShippingConfig(settings);
 
-    return NextResponse.json({
-      success: true,
-      data: publicConfig,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: publicConfig,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("GET /api/shipping/config error:", error);
     return NextResponse.json(

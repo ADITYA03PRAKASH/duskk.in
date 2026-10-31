@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, optimizeImageUrl } from "@/lib/utils";
 import { Combo } from "@/types";
 import { useCart } from "@/context/CartContext";
 import {
@@ -81,8 +81,10 @@ export function ComboDetailClient({ combo }: { combo: Combo }) {
         <div className="lg:col-span-7 space-y-4">
           <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-white border border-duskk-200 shadow-sm">
             <img
-              src={selectedImage}
+              src={optimizeImageUrl(selectedImage, 800)}
               alt={combo.title}
+              fetchPriority="high"
+              decoding="async"
               className="w-full h-full object-cover transition-all duration-300"
             />
 
@@ -120,13 +122,18 @@ export function ComboDetailClient({ combo }: { combo: Combo }) {
                 <button
                   key={idx}
                   onClick={() => setSelectedImage(img)}
-                  className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition ${
-                    selectedImage === img
+                  className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition ${selectedImage === img
                       ? "border-duskk-gold shadow-md scale-95"
                       : "border-duskk-200 hover:border-duskk-400 bg-white"
-                  }`}
+                    }`}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={optimizeImageUrl(img, 160)}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
                 </button>
               ))}
             </div>
@@ -220,11 +227,10 @@ export function ComboDetailClient({ combo }: { combo: Combo }) {
                 <button
                   onClick={handleAddToCart}
                   disabled={isAdding}
-                  className={`flex-1 py-3.5 px-6 rounded-xl text-xs uppercase tracking-widest font-bold transition flex items-center justify-center space-x-2 shadow-lg ${
-                    isAdding
+                  className={`flex-1 py-3.5 px-6 rounded-xl text-xs uppercase tracking-widest font-bold transition flex items-center justify-center space-x-2 shadow-lg ${isAdding
                       ? "bg-emerald-600 text-white"
                       : "bg-duskk-900 text-white hover:bg-duskk-gold hover:text-duskk-950"
-                  }`}
+                    }`}
                 >
                   {isAdding ? (
                     <>
