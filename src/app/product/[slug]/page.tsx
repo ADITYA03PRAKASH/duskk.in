@@ -1,4 +1,4 @@
-import React from "react";
+import React, { cache } from "react";
 import { notFound } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -8,8 +8,13 @@ import { getProductBySlug, getProducts } from "@/services/catalog.service";
 
 export const revalidate = 30;
 
+// Request-scoped React cache to deduplicate database fetches between generateMetadata and ProductDetailPage
+const getCachedProductBySlug = cache(async (slug: string) => {
+  return getProductBySlug(slug);
+});
+
 export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const product = await getProductBySlug(params.slug);
+  const product = await getCachedProductBySlug(params.slug);
 
   if (!product) return { title: "Product Not Found | DUSKK" };
 
@@ -27,7 +32,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function ProductDetailPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
 
-  const product = await getProductBySlug(slug);
+  const product = await getCachedProductBySlug(slug);
 
   if (!product) {
     notFound();

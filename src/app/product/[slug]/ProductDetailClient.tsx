@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
@@ -25,22 +25,29 @@ export function ProductDetailClient({ product }: { product: any }) {
   const router = useRouter();
   const { addItem } = useCart();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+
+  // Synchronize selected image index whenever the viewed product changes (prevent stale index on navigation)
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [product?.id, product?.slug]);
+
   const [quantity, setQuantity] = useState(1);
   const [pincode, setPincode] = useState("");
   const [pincodeResult, setPincodeResult] = useState<string | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string | null>("description");
   const [isAdded, setIsAdded] = useState(false);
 
+  const fallbackPrimary = getProductPrimaryImage(product, "/placeholder.svg");
   const rawImages = product.images || product.product_images;
   const rawList =
     rawImages && rawImages.length > 0
       ? rawImages.map((img: any) => ({
-          url: normalizeImageUrl(img, getProductPrimaryImage(product, "/placeholder.svg")),
+          url: normalizeImageUrl(img, fallbackPrimary),
           altText: typeof img === "string" ? product.name : (img.alt_text || img.altText || product.name),
         }))
       : [
           {
-            url: getProductPrimaryImage(product, "/placeholder.svg"),
+            url: fallbackPrimary,
             altText: product.name,
           },
         ];
@@ -56,12 +63,12 @@ export function ProductDetailClient({ product }: { product: any }) {
   }
   if (images.length === 0) {
     images.push({
-      url: getProductPrimaryImage(product, "/placeholder.svg"),
+      url: fallbackPrimary,
       altText: product.name,
     });
   }
 
-  const currentImage = images[selectedImageIndex] || images[0];
+  const currentImage = images[selectedImageIndex] || images[0] || { url: fallbackPrimary, altText: product.name };
   const isOutOfStock = product.stockQuantity <= 0;
   const isLowStock = product.stockQuantity > 0 && product.stockQuantity <= 5;
 
@@ -170,13 +177,13 @@ export function ProductDetailClient({ product }: { product: any }) {
         {/* Main Display Image */}
         <div className="flex-1 bg-white border border-duskk-200/80 overflow-hidden relative aspect-square sm:aspect-4/5 shadow-sm">
           <img
-            src={optimizeImageUrl(currentImage.url, 800)}
+            src={currentImage.url || fallbackPrimary}
             alt={currentImage.altText || product.name}
             fetchPriority="high"
             decoding="async"
             className="w-full h-full object-cover object-center"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = "/placeholder.svg";
+              (e.target as HTMLImageElement).src = fallbackPrimary;
             }}
           />
 
