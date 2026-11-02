@@ -41,21 +41,26 @@ export default async function HomePage() {
   const featuredProducts = featuredResult.products;
   const bestSellers = bestSellersResult.products;
 
-  // CMS Hero Banner — use first active hero banner; service already provides fallback
-  const heroBanner = banners.find((b: any) => b.banner_type === "hero") ?? banners[0];
+  // CMS Hero Banner — find active hero banner matching 'hero' type
+  const heroBanner = banners.find(
+    (b: any) => b.banner_type === "hero" && b.is_active !== false
+  );
 
   return (
     <>
       <Navbar initialPromoCoupon={promoCoupon} />
 
       <main className="flex-1">
-        {/* 1. HERO VIDEO SECTION — CMS-driven via getBanners() */}
-        <Hero
-          initialTitle={heroBanner?.title}
-          initialSubtitle={heroBanner?.subtitle}
-          initialLink={heroBanner?.link_url}
-          initialPoster={heroBanner?.image_url_desktop}
-        />
+        {/* 1. HERO SECTION — Render only if an active CMS HERO banner exists */}
+        {heroBanner && (
+          <Hero
+            title={heroBanner.title}
+            subtitle={heroBanner.subtitle}
+            link={heroBanner.link_url}
+            imageUrl={heroBanner.image_url_desktop}
+            isActive={heroBanner.is_active !== false}
+          />
+        )}
 
         {/* 2. FEATURED CATEGORIES */}
         <section className="py-20 bg-duskk-cream">

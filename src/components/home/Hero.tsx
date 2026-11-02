@@ -1,86 +1,46 @@
-"use client";
-
-import React, { useState, useEffect, useRef } from "react";
+import React from "react";
 import Link from "next/link";
-import { ArrowRight, Sparkles, Gift } from "lucide-react";
+import { ArrowRight, Gift } from "lucide-react";
 
 interface HeroProps {
-  initialTitle?: string;
-  initialSubtitle?: string;
-  initialLink?: string;
-  initialPoster?: string;
+  title?: string;
+  subtitle?: string;
+  link?: string;
+  imageUrl?: string;
+  isActive?: boolean;
 }
 
 export function Hero({
-  initialTitle = "Thoughtful Gifts. Meaningful Moments.",
-  initialSubtitle = "Discover gifts made for celebrations, connections, and everyday moments.",
-  initialLink = "/shop",
-  initialPoster,
+  title = "Thoughtful Gifts. Meaningful Moments.",
+  subtitle = "Discover gifts made for celebrations, connections, and everyday moments.",
+  link = "/shop",
+  imageUrl,
+  isActive = true,
 }: HeroProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoError, setVideoError] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  // If explicitly disabled in CMS, render nothing
+  if (isActive === false) {
+    return null;
+  }
 
-  useEffect(() => {
-    // Check user preference for reduced motion
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setPrefersReducedMotion(mediaQuery.matches);
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setPrefersReducedMotion(e.matches);
-    };
-
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (videoRef.current && !prefersReducedMotion) {
-      videoRef.current.play().catch(() => {
-        // Autoplay policy fallback
-        console.info("Autoplay prevented or video suspended by browser.");
-      });
-    }
-  }, [prefersReducedMotion]);
-
-  const fallbackPoster =
-    initialPoster ||
-    "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=1920&q=85";
+  const heroImage = imageUrl?.trim() || "";
+  const targetLink = link?.trim() || "/shop";
 
   return (
     <section className="relative min-h-[85vh] sm:min-h-[90vh] flex items-center bg-duskk-900 text-white overflow-hidden">
-      {/* 1. LAYER 0: VIDEO BACKGROUND / FALLBACK POSTER */}
+      {/* 1. LAYER 0: HERO IMAGE BACKGROUND */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        {/* Fallback Image (always present behind video or shown on reduced motion / video error) */}
-        <img
-          src={fallbackPoster}
-          alt="DUSKK Gifting Collection"
-          className={`w-full h-full object-cover object-center transition-opacity duration-700 ${
-            videoError || prefersReducedMotion ? "opacity-60" : "opacity-30"
-          }`}
-        />
-
-        {/* Video Element */}
-        {!prefersReducedMotion && !videoError && (
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            loop
-            playsInline
-            controls={false}
-            preload="metadata"
-            onError={() => setVideoError(true)}
-            className="absolute inset-0 w-full h-full object-cover object-center"
-          >
-            <source src="/videos/duskk-hero.mp4" type="video/mp4" />
-          </video>
+        {heroImage && (
+          <img
+            src={heroImage}
+            alt={title}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            className="w-full h-full object-cover object-center opacity-40 sm:opacity-50"
+          />
         )}
 
-        {/* 2. LAYER 1: DARK CINEMATIC OVERLAY */}
-        {/* Responsive horizontal gradient for optimal text contrast */}
+        {/* 2. LAYER 1: DARK LUXURY OVERLAY FOR TEXT CONTRAST */}
         <div
           className="absolute inset-0"
           style={{
@@ -93,7 +53,7 @@ export function Hero({
         <div className="absolute inset-0 bg-gradient-to-t from-duskk-900 via-transparent to-duskk-900/50" />
       </div>
 
-      {/* 3. LAYER 2 & 3: HERO TEXT & CTA BUTTONS */}
+      {/* 3. LAYER 2: HERO TEXT & CMS TARGET LINK */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32 lg:py-40 flex flex-col items-start w-full">
         <div className="max-w-2xl space-y-6">
           {/* Brand Badge */}
@@ -104,18 +64,20 @@ export function Hero({
 
           {/* Main Headline */}
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal tracking-tight text-white leading-[1.15] drop-shadow-md">
-            {initialTitle}
+            {title}
           </h1>
 
           {/* Subtitle */}
-          <p className="text-sm sm:text-base lg:text-lg text-duskk-100/90 leading-relaxed font-light max-w-xl drop-shadow">
-            {initialSubtitle}
-          </p>
+          {subtitle && (
+            <p className="text-sm sm:text-base lg:text-lg text-duskk-100/90 leading-relaxed font-light max-w-xl drop-shadow">
+              {subtitle}
+            </p>
+          )}
 
           {/* CTA Buttons */}
           <div className="relative z-20 pt-4 flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
             <Link
-              href={initialLink}
+              href={targetLink}
               className="px-8 py-4 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 font-semibold text-xs tracking-[0.2em] uppercase transition duration-300 text-center shadow-xl hover:shadow-2xl flex items-center justify-center space-x-2 rounded-sm"
             >
               <span>SHOP ALL</span>
