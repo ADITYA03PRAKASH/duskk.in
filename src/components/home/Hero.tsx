@@ -1,21 +1,21 @@
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, Gift } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 interface HeroProps {
   title?: string;
-  subtitle?: string;
   link?: string;
   imageUrl?: string;
   isActive?: boolean;
+  headlineColor?: "light" | "dark";
 }
 
 export function Hero({
-  title = "Thoughtful Gifts. Meaningful Moments.",
-  subtitle = "Discover gifts made for celebrations, connections, and everyday moments.",
-  link = "/shop",
+  title,
+  link,
   imageUrl,
   isActive = true,
+  headlineColor = "light",
 }: HeroProps) {
   // If explicitly disabled in CMS, render nothing
   if (isActive === false) {
@@ -23,74 +23,51 @@ export function Hero({
   }
 
   const heroImage = imageUrl?.trim() || "";
-  const targetLink = link?.trim() || "/shop";
+  const targetLink = link?.trim() || "";
+  const headline = title?.trim() || "";
+
+  // Headline color variant: light or dark
+  const headlineColorClass =
+    headlineColor === "dark" ? "text-duskk-900" : "text-white";
 
   return (
-    <section className="relative min-h-[85vh] sm:min-h-[90vh] flex items-center bg-duskk-900 text-white overflow-hidden">
-      {/* 1. LAYER 0: HERO IMAGE BACKGROUND */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        {heroImage && (
-          <img
-            src={heroImage}
-            alt={title}
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-            className="w-full h-full object-cover object-center opacity-40 sm:opacity-50"
-          />
-        )}
-
-        {/* 2. LAYER 1: DARK LUXURY OVERLAY FOR TEXT CONTRAST */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(90deg, rgba(15,15,15,0.85) 0%, rgba(15,15,15,0.65) 45%, rgba(15,15,15,0.35) 100%)",
-          }}
+    <section className="relative w-full aspect-[3/1] flex items-center overflow-hidden bg-duskk-900">
+      {/* Background Image: 100% original CMS-uploaded image URL without transformations */}
+      {heroImage && (
+        <img
+          src={heroImage}
+          alt={headline || "DUSKK Hero Banner"}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none"
         />
+      )}
 
-        {/* Top and bottom subtle vignette to blend with navbar and next section */}
-        <div className="absolute inset-0 bg-gradient-to-t from-duskk-900 via-transparent to-duskk-900/50" />
-      </div>
-
-      {/* 3. LAYER 2: HERO TEXT & CMS TARGET LINK */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32 lg:py-40 flex flex-col items-start w-full">
-        <div className="max-w-2xl space-y-6">
-          {/* Brand Badge */}
-          <div className="inline-flex items-center space-x-2 text-xs font-mono tracking-[0.25em] uppercase text-duskk-gold border border-duskk-gold/40 px-3.5 py-1.5 rounded-full bg-duskk-900/70 backdrop-blur-md shadow-sm">
-            <Gift className="w-3.5 h-3.5 text-duskk-gold" />
-            <span>DUSKK &bull; MADE TO GLOW</span>
-          </div>
-
+      {/* Content Container: Left-aligned and vertically centered */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-6 md:py-10">
+        <div className="max-w-[65%] sm:max-w-md md:max-w-lg lg:max-w-xl flex flex-col items-start space-y-2 sm:space-y-4 md:space-y-6">
           {/* Main Headline */}
-          <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal tracking-tight text-white leading-[1.15] drop-shadow-md">
-            {title}
-          </h1>
-
-          {/* Subtitle */}
-          {subtitle && (
-            <p className="text-sm sm:text-base lg:text-lg text-duskk-100/90 leading-relaxed font-light max-w-xl drop-shadow">
-              {subtitle}
-            </p>
+          {headline && (
+            <h1
+              className={`font-serif text-sm sm:text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-normal tracking-tight leading-[1.12] sm:leading-tight ${headlineColorClass}`}
+            >
+              {headline}
+            </h1>
           )}
 
-          {/* CTA Buttons */}
-          <div className="relative z-20 pt-4 flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-            <Link
-              href={targetLink}
-              className="px-8 py-4 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 font-semibold text-xs tracking-[0.2em] uppercase transition duration-300 text-center shadow-xl hover:shadow-2xl flex items-center justify-center space-x-2 rounded-sm"
-            >
-              <span>SHOP ALL</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-
-            <Link
-              href="/shop"
-              className="px-8 py-4 border border-white/50 hover:border-white text-white font-semibold text-xs tracking-[0.2em] uppercase transition duration-300 text-center bg-black/20 hover:bg-white/10 backdrop-blur-sm rounded-sm"
-            >
-              <span>EXPLORE GIFTS</span>
-            </Link>
-          </div>
+          {/* Primary CTA Button: Render only when valid link is provided */}
+          {targetLink && (
+            <div>
+              <Link
+                href={targetLink}
+                className="inline-flex items-center justify-center space-x-1 sm:space-x-1.5 md:space-x-2 px-3 py-1.5 sm:px-5 sm:py-2.5 md:px-7 md:py-3.5 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 font-semibold text-[9px] sm:text-[11px] md:text-xs tracking-[0.18em] sm:tracking-[0.2em] uppercase rounded transition-colors duration-200 shadow-sm sm:shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-duskk-gold focus:ring-offset-1 sm:focus:ring-offset-2"
+              >
+                <span>SHOP ALL</span>
+                <ArrowRight className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 stroke-[2.25]" />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </section>

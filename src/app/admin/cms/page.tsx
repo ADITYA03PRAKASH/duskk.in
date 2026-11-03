@@ -116,6 +116,7 @@ export default function AdminCMSPage() {
           image: sec.image,
           link: sec.link,
           active: sec.active,
+          headlineColor: sec.headlineColor || "light",
         }),
       });
       if (res.ok) {
@@ -404,7 +405,34 @@ export default function AdminCMSPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div className="sm:col-span-2">
-                      <label className="block font-semibold text-duskk-700 mb-1">Headline / Title</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-semibold text-duskk-700">Headline / Title</label>
+                        <div className="flex items-center space-x-3 bg-duskk-50 border border-duskk-200 px-2.5 py-1 rounded">
+                          <span className="text-[11px] text-duskk-600 font-medium">Text Color:</span>
+                          <label className="inline-flex items-center space-x-1 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`headlineColor-${sec.id}`}
+                              value="light"
+                              checked={(sec.headlineColor || "light") === "light"}
+                              onChange={() => handleFieldChange(sec.id, "headlineColor", "light")}
+                              className="text-duskk-900 focus:ring-duskk-gold"
+                            />
+                            <span className="text-[11px] text-duskk-800 font-medium">Light Text</span>
+                          </label>
+                          <label className="inline-flex items-center space-x-1 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`headlineColor-${sec.id}`}
+                              value="dark"
+                              checked={sec.headlineColor === "dark"}
+                              onChange={() => handleFieldChange(sec.id, "headlineColor", "dark")}
+                              className="text-duskk-900 focus:ring-duskk-gold"
+                            />
+                            <span className="text-[11px] text-duskk-800 font-medium">Dark Text</span>
+                          </label>
+                        </div>
+                      </div>
                       <input
                         type="text"
                         value={sec.title}

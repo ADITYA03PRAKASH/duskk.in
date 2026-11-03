@@ -59,6 +59,7 @@ export async function GET() {
           link: b.link_url,
           sortOrder: b.display_order,
           active: b.is_active,
+          headlineColor: b.headline_color === "dark" ? "dark" : "light",
           createdAt: b.created_at,
         }));
 
@@ -82,10 +83,17 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { key, title, subtitle, image, link, sortOrder, active } = body;
+    const { key, title, subtitle, image, link, sortOrder, active, headlineColor } = body;
 
     if (!title || !image) {
       return NextResponse.json({ success: false, message: "Title and image are required" }, { status: 400 });
+    }
+
+    if (headlineColor !== undefined && headlineColor !== null && headlineColor !== "light" && headlineColor !== "dark") {
+      return NextResponse.json(
+        { success: false, message: "Invalid headlineColor. Allowed values are 'light' or 'dark'." },
+        { status: 400 }
+      );
     }
 
     const { data: banner, error } = await supabaseAdmin
@@ -98,6 +106,7 @@ export async function POST(req: NextRequest) {
         link_url: link || null,
         display_order: sortOrder || 0,
         is_active: active !== false,
+        headline_color: headlineColor || "light",
       })
       .select()
       .maybeSingle();

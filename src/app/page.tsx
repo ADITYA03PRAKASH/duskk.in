@@ -55,10 +55,10 @@ export default async function HomePage() {
         {heroBanner && (
           <Hero
             title={heroBanner.title}
-            subtitle={heroBanner.subtitle}
             link={heroBanner.link_url}
             imageUrl={heroBanner.image_url_desktop}
             isActive={heroBanner.is_active !== false}
+            headlineColor={heroBanner.headline_color === "dark" ? "dark" : "light"}
           />
         )}
 

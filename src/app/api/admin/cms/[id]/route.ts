@@ -14,7 +14,14 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { key, title, subtitle, image, link, sortOrder, active } = body;
+    const { key, title, subtitle, image, link, sortOrder, active, headlineColor } = body;
+
+    if (headlineColor !== undefined && headlineColor !== null && headlineColor !== "light" && headlineColor !== "dark") {
+      return NextResponse.json(
+        { success: false, message: "Invalid headlineColor. Allowed values are 'light' or 'dark'." },
+        { status: 400 }
+      );
+    }
 
     const updates: Record<string, any> = {};
     if (key) updates.banner_type = key;
@@ -24,6 +31,9 @@ export async function PUT(
     if (link !== undefined) updates.link_url = link;
     if (sortOrder !== undefined) updates.display_order = sortOrder;
     if (active !== undefined) updates.is_active = active;
+    if (headlineColor !== undefined) {
+      updates.headline_color = headlineColor || "light";
+    }
 
     const { data: banner, error } = await supabaseAdmin
       .from("banners")
