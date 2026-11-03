@@ -31,7 +31,7 @@ export function Hero({
     headlineColor === "dark" ? "text-duskk-900" : "text-white";
 
   return (
-    <section className="relative w-full h-[200px] md:h-auto md:aspect-[3/1] flex items-center overflow-hidden bg-duskk-900">
+    <section className="relative w-full h-[200px] md:h-auto md:aspect-[3/1] flex items-end overflow-hidden bg-duskk-900">
       {/* Background Image: 100% original CMS-uploaded image URL without transformations */}
       {heroImage && (
         <img
@@ -44,9 +44,9 @@ export function Hero({
         />
       )}
 
-      {/* Content Container: Left-aligned and vertically centered */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-8 md:px-12 lg:px-16 py-2 sm:py-6 md:py-10">
-        <div className="max-w-[65%] sm:max-w-md md:max-w-lg lg:max-w-xl flex flex-col items-start space-y-2 sm:space-y-4 md:space-y-6">
+      {/* Content Container: Lower-left positioned */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-8 md:px-12 lg:px-16 pb-4 sm:pb-8 md:pb-12 lg:pb-16 pt-2">
+        <div className="max-w-[65%] sm:max-w-md md:max-w-lg lg:max-w-xl flex flex-col items-start space-y-2 sm:space-y-3 md:space-y-4">
           {/* Main Headline */}
           {headline && (
             <h1
