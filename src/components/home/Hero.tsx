@@ -31,7 +31,7 @@ export function Hero({
     headlineColor === "dark" ? "text-duskk-900" : "text-white";
 
   return (
-    <section className="relative w-full aspect-[3/1] flex items-center overflow-hidden bg-duskk-900">
+    <section className="relative w-full h-[200px] md:h-auto md:aspect-[3/1] flex items-center overflow-hidden bg-duskk-900">
       {/* Background Image: 100% original CMS-uploaded image URL without transformations */}
       {heroImage && (
         <img
