@@ -14,12 +14,23 @@ export interface CustomComboComponentCart {
   quantity: number;
 }
 
+export interface CustomComboCartBoxDesign {
+  id: string;
+  name: string;
+  imageUrl?: string | null;
+  supportedProductCount: number;
+  additionalPrice: number;
+  description?: string | null;
+}
+
 export interface CartItem {
   productId: string;
   comboId?: string;
   isCombo?: boolean;
   isCustomCombo?: boolean;
   customComboComponents?: CustomComboComponentCart[];
+  boxDesignId?: string | null;
+  boxDesign?: CustomComboCartBoxDesign | null;
   variantId?: string | null;
   variantTitle?: string | null;
   name: string;
@@ -41,6 +52,8 @@ interface CartContextType {
     price: number;
     mrp: number;
     image?: string;
+    boxDesignId?: string | null;
+    boxDesign?: CustomComboCartBoxDesign | null;
     components: CustomComboComponentCart[];
     availableStock?: number;
   }, quantity?: number) => void;
@@ -146,6 +159,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       price: number;
       mrp: number;
       image?: string;
+      boxDesignId?: string | null;
+      boxDesign?: CustomComboCartBoxDesign | null;
       components: CustomComboComponentCart[];
       availableStock?: number;
     },
@@ -163,14 +178,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         isCombo: true,
         isCustomCombo: true,
         customComboComponents: customCombo.components,
+        boxDesignId: customCombo.boxDesignId || null,
+        boxDesign: customCombo.boxDesign || null,
         variantId: null,
-        variantTitle: componentSummary,
+        variantTitle: `${componentSummary}${customCombo.boxDesign ? ` • Packaging: ${customCombo.boxDesign.name}` : ""}`,
         name: customCombo.title || `Custom Combo (${totalPieces} Pieces)`,
         sku: `CUSTOM-COMBO-${Date.now().toString().slice(-6)}`,
         price: Number(customCombo.price),
         mrp: Number(customCombo.mrp || customCombo.price),
         image:
           customCombo.image ||
+          customCombo.boxDesign?.imageUrl ||
           customCombo.components[0]?.image ||
           "/placeholder.jpg",
         stockQuantity: customCombo.availableStock || 10,

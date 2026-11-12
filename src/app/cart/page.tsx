@@ -37,6 +37,7 @@ export default function CartPage() {
         return {
           isCustomCombo: true,
           quantity: i.quantity,
+          boxDesignId: i.boxDesignId || i.boxDesign?.id || null,
           customComponents: i.customComboComponents?.map((c) => ({
             productId: c.productId,
             variantId: c.variantId || null,
@@ -101,6 +102,7 @@ export default function CartPage() {
           return {
             isCustomCombo: true,
             quantity: i.quantity,
+            boxDesignId: i.boxDesignId || i.boxDesign?.id || null,
             customComponents: i.customComboComponents?.map((c) => ({
               productId: c.productId,
               variantId: c.variantId || null,
@@ -197,6 +199,19 @@ export default function CartPage() {
                       />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold text-duskk-900">{item.name}</h4>
+                        {item.boxDesign ? (
+                          <p className="text-xs text-duskk-700 font-medium mt-0.5">
+                            🎁 Packaging Box: <strong className="text-duskk-900">{item.boxDesign.name}</strong>
+                            {item.boxDesign.additionalPrice > 0 ? ` (+${formatPrice(item.boxDesign.additionalPrice)})` : " (Included)"}
+                          </p>
+                        ) : item.isCustomCombo ? (
+                          <p className="text-xs text-rose-600 font-semibold mt-0.5">
+                            ⚠️ Packaging box required.{" "}
+                            <Link href="/build-your-combo" className="underline">
+                              Please select a box
+                            </Link>
+                          </p>
+                        ) : null}
                         <p className="text-xs text-duskk-400 font-mono mt-0.5">SKU: {item.sku}</p>
                         <div className="flex items-baseline space-x-2 mt-1">
                           <span className="text-sm font-bold text-duskk-900">

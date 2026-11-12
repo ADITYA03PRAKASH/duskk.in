@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { formatPrice, normalizeImageUrl } from "@/lib/utils";
-import { CustomComboSettings, PageBannerConfig } from "@/types";
+import { CustomComboSettings, PageBannerConfig, ComboBoxDesign } from "@/types";
 import { useCart, CustomComboComponentCart } from "@/context/CartContext";
 import {
   Gift,
@@ -69,11 +69,13 @@ export function BuildYourComboClient({
   initialCategories,
   initialProducts,
   initialBanner,
+  initialBoxDesigns = [],
 }: {
   initialSettings: CustomComboSettings;
   initialCategories: any[];
   initialProducts: BuilderProduct[];
   initialBanner?: PageBannerConfig | null;
+  initialBoxDesigns?: ComboBoxDesign[];
 }) {
   const { addCustomComboToCart } = useCart();
 
@@ -81,9 +83,13 @@ export function BuildYourComboClient({
   const [categories] = useState<any[]>(initialCategories);
   const [products] = useState<BuilderProduct[]>(initialProducts);
   const [banner] = useState<PageBannerConfig | null>(initialBanner || null);
+  const [boxDesigns, setBoxDesigns] = useState<ComboBoxDesign[]>(initialBoxDesigns);
 
   // Selected products for the custom combo
   const [selectedItems, setSelectedItems] = useState<SelectedComboItem[]>([]);
+
+  // Selected Box Design ID for the entire combo
+  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
 
   // Selected variants per product (productId -> variantId)
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
@@ -256,16 +262,44 @@ export function BuildYourComboClient({
     return result;
   }, [products, selectedCategory, searchQuery, sortBy]);
 
+  // Distinct selected products count (number of different selected product IDs)
+  const distinctProductCount = useMemo(() => {
+    return new Set(selectedItems.map((i) => i.productId)).size;
+  }, [selectedItems]);
+
+  // Compatible active box designs matching exact distinct product count
+  const matchingBoxDesigns = useMemo(() => {
+    return boxDesigns.filter(
+      (b) => b.isActive && b.supportedProductCount === distinctProductCount
+    );
+  }, [boxDesigns, distinctProductCount]);
+
+  // Selected box object
+  const selectedBox = useMemo(() => {
+    if (!selectedBoxId) return null;
+    return boxDesigns.find((b) => b.id === selectedBoxId) || null;
+  }, [boxDesigns, selectedBoxId]);
+
+  // Clear incompatible box selection if distinct product count changes
+  useEffect(() => {
+    if (selectedBoxId) {
+      const currentBox = boxDesigns.find((b) => b.id === selectedBoxId);
+      if (!currentBox || !currentBox.isActive || currentBox.supportedProductCount !== distinctProductCount) {
+        setSelectedBoxId(null);
+      }
+    }
+  }, [distinctProductCount, boxDesigns, selectedBoxId]);
+
   // Live Pricing Calculation
   const comboCalculation = useMemo(() => {
     const rawTotal = selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const rawMrp = selectedItems.reduce((sum, item) => sum + item.mrp * item.quantity, 0);
     const totalPieces = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
 
-    const isComplete = selectedItems.length >= settings.minItems && selectedItems.length <= settings.maxItems;
+    const isProductsComplete = selectedItems.length >= settings.minItems && selectedItems.length <= settings.maxItems;
 
     let discount = 0;
-    if (isComplete && rawTotal > 0) {
+    if (isProductsComplete && rawTotal > 0) {
       if (settings.discountType === "percentage") {
         let calculated = (rawTotal * (settings.discountValue || 0)) / 100;
         if (settings.maxDiscountAmount && calculated > settings.maxDiscountAmount) {
@@ -280,26 +314,48 @@ export function BuildYourComboClient({
       }
     }
 
-    const finalPrice = Math.max(0, rawTotal - discount);
-    const totalSavings = Math.max(0, rawMrp - finalPrice);
+    // Box additional charge is strictly excluded from the combo discount!
+    const boxCharge = selectedBox ? Number(selectedBox.additionalPrice || 0) : 0;
+    const jewelleryDiscountedTotal = Math.max(0, rawTotal - discount);
+    const finalPrice = jewelleryDiscountedTotal + boxCharge;
+    const effectiveTotalMrp = rawMrp + boxCharge;
+    const totalSavings = Math.max(0, rawMrp - jewelleryDiscountedTotal);
     const savingsPercent = rawMrp > 0 ? Math.round((totalSavings / rawMrp) * 100) : 0;
+
+    const hasValidBox = Boolean(selectedBox && selectedBox.supportedProductCount === distinctProductCount);
+    const isComplete = isProductsComplete && hasValidBox;
 
     return {
       rawTotal,
       rawMrp,
       discount,
+      boxCharge,
       finalPrice,
       totalSavings,
       savingsPercent,
       totalPieces,
+      isProductsComplete,
+      hasValidBox,
       isComplete,
       itemsNeeded: Math.max(0, settings.minItems - selectedItems.length),
     };
-  }, [selectedItems, settings]);
+  }, [selectedItems, settings, selectedBox, distinctProductCount]);
+
+  // Handle Bottom Floating Action Button Click
+  const handleBottomActionClick = () => {
+    if (comboCalculation.isComplete) {
+      setIsReviewModalOpen(true);
+    } else if (comboCalculation.isProductsComplete && !comboCalculation.hasValidBox && matchingBoxDesigns.length > 0) {
+      const section = document.getElementById("box-selection-section");
+      if (section) {
+        section.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  };
 
   // Final Action: Add Custom Combo to Cart
   const handleAddToCart = () => {
-    if (!comboCalculation.isComplete) return;
+    if (!comboCalculation.isComplete || !selectedBox) return;
 
     const components: CustomComboComponentCart[] = selectedItems.map((item) => ({
       productId: item.productId,
@@ -317,8 +373,17 @@ export function BuildYourComboClient({
       id: `custom_combo_${Date.now()}`,
       title: `${settings.title} (${comboCalculation.totalPieces} Pieces)`,
       price: comboCalculation.finalPrice,
-      mrp: comboCalculation.rawMrp,
-      image: selectedItems[0]?.image || "/placeholder.jpg",
+      mrp: comboCalculation.rawMrp + (selectedBox.additionalPrice || 0),
+      image: selectedBox.imageUrl || selectedItems[0]?.image || "/placeholder.jpg",
+      boxDesignId: selectedBox.id,
+      boxDesign: {
+        id: selectedBox.id,
+        name: selectedBox.name,
+        imageUrl: selectedBox.imageUrl,
+        supportedProductCount: selectedBox.supportedProductCount,
+        additionalPrice: selectedBox.additionalPrice,
+        description: selectedBox.description,
+      },
       components,
     });
 
@@ -421,27 +486,34 @@ export function BuildYourComboClient({
               </div>
             )}
 
-            {/* 3 Step Interactive Progress Pills */}
-            <div className="grid grid-cols-3 gap-3 max-w-xl mx-auto mt-8 text-xs border-t border-white/10 pt-6">
+            {/* 4 Step Interactive Progress Pills */}
+            <div className="grid grid-cols-4 gap-2 sm:gap-3 max-w-2xl mx-auto mt-8 text-xs border-t border-white/10 pt-6">
               <div className={`flex flex-col items-center text-center space-y-1 ${selectedItems.length > 0 ? "text-duskk-gold" : "text-duskk-400"}`}>
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${selectedItems.length > 0 ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
                   1
                 </div>
-                <span className="text-[11px] font-medium uppercase tracking-wider">Browse & Pick</span>
+                <span className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wider">Browse & Pick</span>
               </div>
 
-              <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.isComplete ? "text-duskk-gold" : "text-duskk-400"}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.isComplete ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
+              <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.isProductsComplete ? "text-duskk-gold" : "text-duskk-400"}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.isProductsComplete ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
                   2
                 </div>
-                <span className="text-[11px] font-medium uppercase tracking-wider">Configure Sizes</span>
+                <span className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wider">Configure Sizes</span>
+              </div>
+
+              <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.hasValidBox ? "text-duskk-gold" : "text-duskk-400"}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.hasValidBox ? "bg-duskk-gold text-duskk-900" : "bg-white/10 text-white"}`}>
+                  3
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wider">Choose Box</span>
               </div>
 
               <div className={`flex flex-col items-center text-center space-y-1 ${comboCalculation.isComplete ? "text-emerald-400 font-semibold" : "text-duskk-400"}`}>
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${comboCalculation.isComplete ? "bg-emerald-500 text-white" : "bg-white/10 text-white"}`}>
-                  3
+                  4
                 </div>
-                <span className="text-[11px] font-medium uppercase tracking-wider">Review & Save</span>
+                <span className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wider">Review & Save</span>
               </div>
             </div>
           </div>
@@ -673,6 +745,127 @@ export function BuildYourComboClient({
         )}
       </section>
 
+      {/* 3.5 PRESENTATION BOX SELECTION SECTION (Step 3: Choose Box) */}
+      {selectedItems.length > 0 && (
+        <section id="box-selection-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+          <div className="bg-white border border-duskk-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-duskk-200 gap-4">
+              <div>
+                <div className="inline-flex items-center space-x-1.5 text-duskk-gold text-xs font-bold uppercase tracking-wider mb-1">
+                  <Gift className="w-4 h-4" />
+                  <span>Step 3 &bull; Presentation Box</span>
+                </div>
+                <h2 className="font-serif text-2xl font-bold text-duskk-900">
+                  Choose Your Luxury Box Design
+                </h2>
+                <p className="text-xs text-duskk-600 mt-1">
+                  Showing presentation boxes tailored for your combination of{" "}
+                  <strong className="text-duskk-900 font-semibold">{distinctProductCount} selected jewellery piece{distinctProductCount === 1 ? "" : "s"}</strong>.
+                </p>
+              </div>
+
+              {selectedBox ? (
+                <div className="flex items-center space-x-2 bg-emerald-50 border border-emerald-300 text-emerald-800 px-3.5 py-1.5 rounded-full text-xs font-medium self-start md:self-auto">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>Selected: <strong>{selectedBox.name}</strong></span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2 bg-amber-50 border border-amber-300 text-amber-800 px-3.5 py-1.5 rounded-full text-xs font-medium self-start md:self-auto">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span>Select 1 box to complete your bespoke combo</span>
+                </div>
+              )}
+            </div>
+
+            {matchingBoxDesigns.length === 0 ? (
+              <div className="py-12 text-center space-y-3">
+                <Package className="w-10 h-10 text-duskk-300 mx-auto" />
+                <h4 className="font-serif text-base font-semibold text-duskk-900">
+                  No matching box designs available for {distinctProductCount} piece{distinctProductCount === 1 ? "" : "s"}
+                </h4>
+                <p className="text-xs text-duskk-500 max-w-md mx-auto leading-relaxed">
+                  Please select between {settings.minItems} and {settings.maxItems} pieces to reveal matching handcrafted gift boxes.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-6">
+                {matchingBoxDesigns.map((box) => {
+                  const isSelected = selectedBoxId === box.id;
+
+                  return (
+                    <div
+                      key={box.id}
+                      onClick={() => setSelectedBoxId(box.id)}
+                      className={`cursor-pointer group rounded-xl border p-4 transition-all duration-300 flex flex-col justify-between ${
+                        isSelected
+                          ? "border-duskk-900 ring-2 ring-duskk-gold/50 bg-duskk-50/50 shadow-md"
+                          : "border-duskk-200 hover:border-duskk-gold/70 bg-white hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-duskk-100">
+                          <img
+                            src={box.imageUrl ? normalizeImageUrl(box.imageUrl) : "/placeholder.jpg"}
+                            alt={box.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                            }}
+                          />
+                          <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded">
+                            {box.supportedProductCount} Items Box
+                          </div>
+
+                          {isSelected && (
+                            <div className="absolute top-2.5 right-2.5 bg-duskk-900 text-duskk-gold px-2 py-1 rounded-full text-xs font-bold flex items-center space-x-1 shadow">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Chosen</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between items-start gap-2">
+                            <h3 className="font-serif text-sm font-bold text-duskk-900 group-hover:text-duskk-gold transition">
+                              {box.name}
+                            </h3>
+                            <span className="text-xs font-bold font-serif text-duskk-900 whitespace-nowrap">
+                              {box.additionalPrice > 0 ? `+${formatPrice(box.additionalPrice)}` : "Included"}
+                            </span>
+                          </div>
+                          {box.description && (
+                            <p className="text-xs text-duskk-600 mt-1 line-clamp-2 leading-relaxed">
+                              {box.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="pt-4 mt-2 border-t border-duskk-100">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBoxId(box.id);
+                          }}
+                          className={`w-full py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition ${
+                            isSelected
+                              ? "bg-duskk-900 text-white"
+                              : "bg-duskk-100 hover:bg-duskk-200 text-duskk-800"
+                          }`}
+                        >
+                          {isSelected ? "Selected Box" : "Select This Box"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* 4. PERSISTENT FLOATING STICKY COMBO BAR */}
       <aside className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-duskk-300 shadow-2xl py-3 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
@@ -744,23 +937,36 @@ export function BuildYourComboClient({
             </div>
 
             {/* Action Trigger */}
-            <button
-              type="button"
-              onClick={() => setIsReviewModalOpen(true)}
-              disabled={!comboCalculation.isComplete}
-              className={`px-5 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all shadow-md flex items-center space-x-2 ${
-                comboCalculation.isComplete
-                  ? "bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white cursor-pointer"
-                  : "bg-duskk-200 text-duskk-400 cursor-not-allowed"
-              }`}
-            >
-              <span>
-                {comboCalculation.itemsNeeded > 0
+            {(() => {
+              const isActionDisabled =
+                !comboCalculation.isProductsComplete ||
+                (!comboCalculation.hasValidBox && matchingBoxDesigns.length === 0);
+
+              const buttonLabel =
+                comboCalculation.itemsNeeded > 0
                   ? `Select ${comboCalculation.itemsNeeded} More`
-                  : "Review & Purchase"}
-              </span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+                  : !comboCalculation.hasValidBox
+                  ? matchingBoxDesigns.length === 0
+                    ? "No Box Available"
+                    : "Choose Box"
+                  : "Review & Purchase";
+
+              return (
+                <button
+                  type="button"
+                  onClick={handleBottomActionClick}
+                  disabled={isActionDisabled}
+                  className={`px-5 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all shadow-md flex items-center space-x-2 ${
+                    !isActionDisabled
+                      ? "bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white cursor-pointer"
+                      : "bg-duskk-200 text-duskk-400 cursor-not-allowed"
+                  }`}
+                >
+                  <span>{buttonLabel}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              );
+            })()}
           </div>
         </div>
       </aside>
@@ -859,6 +1065,14 @@ export function BuildYourComboClient({
                       Combo Discount ({settings.discountType === "percentage" ? `${settings.discountValue}%` : "Fixed"}):
                     </span>
                     <span>-{formatPrice(comboCalculation.discount)}</span>
+                  </div>
+                )}
+
+                {/* Selected Box Line */}
+                {selectedBox && (
+                  <div className="flex justify-between text-duskk-800 font-medium">
+                    <span>Selected Box ({selectedBox.name}):</span>
+                    <span>{selectedBox.additionalPrice > 0 ? `+${formatPrice(selectedBox.additionalPrice)}` : "Included"}</span>
                   </div>
                 )}
 

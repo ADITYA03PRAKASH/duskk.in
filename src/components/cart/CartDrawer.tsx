@@ -150,6 +150,27 @@ export function CartDrawer() {
 
                       {item.customComboComponents && item.customComboComponents.length > 0 ? (
                         <div className="mt-1.5 bg-duskk-50 p-2 rounded text-[11px] border border-duskk-100">
+                          {item.boxDesign ? (
+                            <div className="mb-1.5 pb-1.5 border-b border-duskk-200/60 flex items-center justify-between text-duskk-800">
+                              <span className="font-semibold text-[10px] uppercase tracking-wider text-duskk-900">
+                                🎁 Box: {item.boxDesign.name}
+                              </span>
+                              {item.boxDesign.additionalPrice > 0 ? (
+                                <span className="font-mono text-[10px] text-duskk-700 font-medium">
+                                  +{formatPrice(item.boxDesign.additionalPrice)}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-emerald-700 font-bold uppercase">Included</span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mb-1.5 pb-1.5 border-b border-rose-200 flex items-center justify-between text-rose-700 text-[10px] font-medium">
+                              <span>⚠️ Packaging box required</span>
+                              <Link href="/build-your-combo" onClick={closeCart} className="underline font-bold">
+                                Select Box
+                              </Link>
+                            </div>
+                          )}
                           <p className="font-semibold text-duskk-800 text-[10px] uppercase tracking-wider mb-1">
                             Included In Combo:
                           </p>

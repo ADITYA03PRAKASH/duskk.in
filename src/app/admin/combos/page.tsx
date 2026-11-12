@@ -26,9 +26,10 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { CustomComboSettingsTab } from "./CustomComboSettingsTab";
+import { BoxDesignsSettingsTab } from "./BoxDesignsSettingsTab";
 
 export default function AdminCombosPage() {
-  const [activeTab, setActiveTab] = useState<"PREDEFINED" | "CUSTOM_BUILDER">("PREDEFINED");
+  const [activeTab, setActiveTab] = useState<"PREDEFINED" | "CUSTOM_BUILDER" | "BOX_DESIGNS">("PREDEFINED");
   const [combos, setCombos] = useState<Combo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -512,9 +513,27 @@ export default function AdminCombosPage() {
             Mode B
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("BOX_DESIGNS")}
+          className={`flex items-center space-x-2 pb-3 text-xs uppercase tracking-wider font-semibold border-b-2 transition ${
+            activeTab === "BOX_DESIGNS"
+              ? "border-duskk-900 text-duskk-900"
+              : "border-transparent text-duskk-400 hover:text-duskk-800"
+          }`}
+        >
+          <Package className="w-4 h-4 text-duskk-gold" />
+          <span>Box Designs (Packaging)</span>
+          <span className="ml-1.5 px-2 py-0.5 text-[10px] bg-duskk-100 text-duskk-800 font-bold rounded-full font-mono">
+            CMS
+          </span>
+        </button>
       </div>
 
-      {activeTab === "CUSTOM_BUILDER" ? (
+      {activeTab === "BOX_DESIGNS" ? (
+        <BoxDesignsSettingsTab />
+      ) : activeTab === "CUSTOM_BUILDER" ? (
         <CustomComboSettingsTab />
       ) : (
         <>

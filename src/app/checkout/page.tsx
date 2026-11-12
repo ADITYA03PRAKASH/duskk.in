@@ -114,6 +114,7 @@ function CheckoutContent() {
         return {
           isCustomCombo: true,
           quantity: i.quantity,
+          boxDesignId: i.boxDesignId || i.boxDesign?.id || null,
           customComponents: i.customComboComponents?.map((c) => ({
             productId: c.productId,
             variantId: c.variantId || null,
@@ -172,6 +173,7 @@ function CheckoutContent() {
               return {
                 isCustomCombo: true,
                 quantity: i.quantity,
+                boxDesignId: i.boxDesignId || i.boxDesign?.id || null,
                 customComponents: i.customComboComponents?.map((c) => ({
                   productId: c.productId,
                   variantId: c.variantId || null,
@@ -330,6 +332,7 @@ function CheckoutContent() {
               return {
                 isCustomCombo: true,
                 quantity: i.quantity,
+                boxDesignId: i.boxDesignId || i.boxDesign?.id || null,
                 customComponents: i.customComboComponents?.map((c) => ({
                   productId: c.productId,
                   variantId: c.variantId || null,
@@ -722,6 +725,12 @@ function CheckoutContent() {
                                   </span>
                                 ) : null}
                                 <p className="font-semibold text-duskk-900 line-clamp-1">{i.name}</p>
+                                {i.boxDesign && (
+                                  <p className="text-[11px] text-duskk-700 font-medium">
+                                    🎁 Box: {i.boxDesign.name}
+                                    {i.boxDesign.additionalPrice > 0 ? ` (+${formatPrice(i.boxDesign.additionalPrice)})` : ""}
+                                  </p>
+                                )}
                                 <p className="text-[11px] text-duskk-500 font-mono">Qty: {i.quantity}</p>
                               </div>
                             </div>

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { Combo, ComboInput, ComboItemDetail, CustomComboSettings } from "@/types";
+import { Combo, ComboInput, ComboItemDetail, CustomComboSettings, ComboBoxDesign, ComboBoxDesignSnapshot } from "@/types";
 import { revalidatePath } from "next/cache";
 
 function slugify(text: string): string {
@@ -624,10 +624,12 @@ export async function saveCustomComboOrderSnapshot(
     subtotal: number;
     discount: number;
     finalPrice: number;
+    boxDesignId?: string | null;
+    boxSnapshot?: ComboBoxDesignSnapshot | null;
   }
 ) {
   try {
-    const { error } = await supabaseAdmin.from("custom_combos").insert({
+    const payload: any = {
       order_id: orderId,
       customer_id: customerId || null,
       combo_title: customCombo.title,
@@ -635,13 +637,128 @@ export async function saveCustomComboOrderSnapshot(
       subtotal_amount: customCombo.subtotal,
       discount_amount: customCombo.discount,
       final_price: customCombo.finalPrice,
-    });
+      box_design_id: customCombo.boxDesignId || null,
+      box_snapshot: customCombo.boxSnapshot || null,
+    };
+
+    let { error } = await supabaseAdmin.from("custom_combos").insert(payload);
+
+    // Fallback if migration columns box_design_id or box_snapshot are not yet created in remote DB
+    if (error && (error.message?.includes("box_") || error.code === "42703")) {
+      const fallbackPayload = {
+        order_id: orderId,
+        customer_id: customerId || null,
+        combo_title: customCombo.title,
+        components: customCombo.components,
+        subtotal_amount: customCombo.subtotal,
+        discount_amount: customCombo.discount,
+        final_price: customCombo.finalPrice,
+      };
+      const retryResult = await supabaseAdmin.from("custom_combos").insert(fallbackPayload);
+      error = retryResult.error;
+    }
 
     if (error) {
       console.error("[ComboService] saveCustomComboOrderSnapshot error:", error);
     }
   } catch (err) {
     console.error("[ComboService] saveCustomComboOrderSnapshot exception:", err);
+  }
+}
+
+export async function getActiveBoxDesigns(): Promise<ComboBoxDesign[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("combo_box_designs")
+      .select("*")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("[ComboService] getActiveBoxDesigns error/notice:", error.message);
+      return [];
+    }
+
+    return (data || []).map((b: any) => ({
+      id: b.id,
+      name: b.name,
+      slug: b.slug,
+      description: b.description || null,
+      imageUrl: b.image_url || null,
+      supportedProductCount: Number(b.supported_product_count),
+      additionalPrice: Number(b.additional_price || 0),
+      isActive: Boolean(b.is_active),
+      displayOrder: Number(b.display_order || 0),
+      createdAt: b.created_at,
+      updatedAt: b.updated_at,
+    }));
+  } catch (err) {
+    console.warn("[ComboService] getActiveBoxDesigns exception:", err);
+    return [];
+  }
+}
+
+export async function getAllBoxDesignsAdmin(): Promise<ComboBoxDesign[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("combo_box_designs")
+      .select("*")
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("[ComboService] getAllBoxDesignsAdmin error:", error.message);
+      return [];
+    }
+
+    return (data || []).map((b: any) => ({
+      id: b.id,
+      name: b.name,
+      slug: b.slug,
+      description: b.description || null,
+      imageUrl: b.image_url || null,
+      supportedProductCount: Number(b.supported_product_count),
+      additionalPrice: Number(b.additional_price || 0),
+      isActive: Boolean(b.is_active),
+      displayOrder: Number(b.display_order || 0),
+      createdAt: b.created_at,
+      updatedAt: b.updated_at,
+    }));
+  } catch (err) {
+    console.warn("[ComboService] getAllBoxDesignsAdmin exception:", err);
+    return [];
+  }
+}
+
+export async function getBoxDesignById(id: string): Promise<ComboBoxDesign | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("combo_box_designs")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      description: data.description || null,
+      imageUrl: data.image_url || null,
+      supportedProductCount: Number(data.supported_product_count),
+      additionalPrice: Number(data.additional_price || 0),
+      isActive: Boolean(data.is_active),
+      displayOrder: Number(data.display_order || 0),
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (err) {
+    console.warn("[ComboService] getBoxDesignById exception:", err);
+    return null;
   }
 }
 

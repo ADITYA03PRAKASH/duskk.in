@@ -182,7 +182,7 @@ export async function initiateCheckoutOrder(
         });
       }
 
-      // If it is custom combo, save immutable custom_combos record
+      // If it is custom combo, save immutable custom_combos record with box snapshot
       if (item.isCustomCombo) {
         await saveCustomComboOrderSnapshot(orderId, customerRecord.id, {
           title: item.name,
@@ -190,6 +190,8 @@ export async function initiateCheckoutOrder(
           subtotal: item.mrp,
           discount: Math.max(0, item.mrp - item.price),
           finalPrice: item.price * item.quantity,
+          boxDesignId: item.boxDesign?.id || null,
+          boxSnapshot: item.boxDesign || null,
         });
       }
     }

@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { CartItemInput, PriceBreakdown } from "@/types";
-import { getCustomComboSettings } from "./combo.service";
+import { CartItemInput, PriceBreakdown, ComboBoxDesignSnapshot } from "@/types";
+import { getCustomComboSettings, getBoxDesignById } from "./combo.service";
 import {
   getShippingSettings,
   calculateShipping,
@@ -407,11 +407,44 @@ export async function validateAndCalculateCart(
         }
       }
 
-      const finalComboUnitPrice = Math.max(0, combinedRawPrice - comboDiscount);
+      // Box Design Authoritative Lookup & Validation
+      const distinctProductCount = seenProductIds.size;
+      let boxSnapshot: ComboBoxDesignSnapshot | null = null;
+      let boxPrice = 0;
+
+      if (!item.boxDesignId) {
+        throw new Error("Please select a presentation box for your custom combo.");
+      }
+
+      const boxDesign = await getBoxDesignById(item.boxDesignId);
+      if (!boxDesign || !boxDesign.isActive) {
+        throw new Error("Selected presentation box is no longer available. Please choose a presentation box.");
+      }
+
+      if (boxDesign.supportedProductCount !== distinctProductCount) {
+        throw new Error(
+          `Selected box "${boxDesign.name}" supports exactly ${boxDesign.supportedProductCount} products, but your combo contains ${distinctProductCount} products. Please select a matching presentation box.`
+        );
+      }
+
+      boxPrice = Number(boxDesign.additionalPrice || 0);
+      boxSnapshot = {
+        id: boxDesign.id,
+        name: boxDesign.name,
+        imageUrl: boxDesign.imageUrl || null,
+        supportedProductCount: boxDesign.supportedProductCount,
+        additionalPrice: boxPrice,
+        description: boxDesign.description || null,
+      };
+
+      // Pricing formula: (jewellery subtotal - combo discount) + box additional price
+      // Box charges are strictly excluded from the combo discount!
+      const jewelleryDiscountedPrice = Math.max(0, combinedRawPrice - comboDiscount);
+      const finalComboUnitPrice = jewelleryDiscountedPrice + boxPrice;
       const itemSubtotal = finalComboUnitPrice * itemQuantity;
       subtotal += itemSubtotal;
 
-      const firstImg = validatedComponents[0]?.image || "/placeholder.jpg";
+      const firstImg = boxSnapshot.imageUrl || validatedComponents[0]?.image || "/placeholder.jpg";
       const totalPiecesCount = validatedComponents.reduce((s, c) => s + c.quantity, 0);
 
       validatedItems.push({
@@ -421,14 +454,15 @@ export async function validateAndCalculateCart(
         isCustomCombo: true,
         variantId: null,
         name: `Custom Combo (${totalPiecesCount} Pieces)`,
-        variantTitle: validatedComponents.map((c) => `${c.name}${c.variantTitle ? ` (${c.variantTitle})` : ""} ×${c.quantity}`).join(", "),
+        variantTitle: `${validatedComponents.map((c) => `${c.name}${c.variantTitle ? ` (${c.variantTitle})` : ""} ×${c.quantity}`).join(", ")}${boxSnapshot ? ` • Packaging: ${boxSnapshot.name}` : ""}`,
         sku: `CUSTOM-COMBO-${Date.now().toString().slice(-6)}`,
         image: firstImg,
         price: finalComboUnitPrice,
-        mrp: combinedMrp,
+        mrp: combinedMrp + boxPrice,
         quantity: itemQuantity,
         subtotal: itemSubtotal,
         availableStock: maxCombosPossible,
+        boxDesign: boxSnapshot,
         comboComponents: validatedComponents,
       });
 

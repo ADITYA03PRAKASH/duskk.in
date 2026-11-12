@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCustomComboSettings, getEligibleBuilderProducts } from "@/services/combo.service";
+import { getCustomComboSettings, getEligibleBuilderProducts, getActiveBoxDesigns } from "@/services/combo.service";
 import { getCategories } from "@/services/catalog.service";
 
 export const dynamic = "force-dynamic";
@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const settings = await getCustomComboSettings();
-    const [categories, products] = await Promise.all([
+    const [categories, products, boxDesigns] = await Promise.all([
       getCategories(),
       settings.isEnabled ? getEligibleBuilderProducts(settings) : Promise.resolve([]),
+      getActiveBoxDesigns(),
     ]);
 
     // Check promotion date window
@@ -27,6 +28,7 @@ export async function GET() {
         },
         categories: (categories || []).filter((c: any) => c.is_active !== false),
         products,
+        boxDesigns,
       },
     });
   } catch (error: any) {

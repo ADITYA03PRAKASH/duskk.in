@@ -9,6 +9,7 @@ export interface CartItemInput {
   comboId?: string;
   isCustomCombo?: boolean;
   customComponents?: CustomComboComponentInput[];
+  boxDesignId?: string | null;
   variantId?: string | null;
   quantity: number;
 }
@@ -56,11 +57,36 @@ export interface CustomComboSettings {
   homepageDisplayOrder: number;
 }
 
+export interface ComboBoxDesign {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  supportedProductCount: number;
+  additionalPrice: number;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ComboBoxDesignSnapshot {
+  id: string;
+  name: string;
+  imageUrl?: string | null;
+  supportedProductCount: number;
+  additionalPrice: number;
+  description?: string | null;
+}
+
 export interface CustomComboRecord {
   id: string;
   orderId: string;
   customerId?: string | null;
   comboTitle: string;
+  boxDesignId?: string | null;
+  boxSnapshot?: ComboBoxDesignSnapshot | null;
   components: {
     productId: string;
     variantId?: string | null;
@@ -176,6 +202,7 @@ export interface PriceBreakdown {
     quantity: number;
     subtotal: number;
     availableStock: number;
+    boxDesign?: ComboBoxDesignSnapshot | null;
     comboComponents?: {
       productId: string;
       variantId?: string | null;
