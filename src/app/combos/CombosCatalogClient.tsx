@@ -2,12 +2,14 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatPrice, normalizeImageUrl, optimizeImageUrl } from "@/lib/utils";
 import { Combo, CustomComboSettings, PageBannerConfig } from "@/types";
 import { useCart } from "@/context/CartContext";
 import {
   Gift,
   ShoppingBag,
+  Zap,
   Check,
   Package,
   Sparkles,
@@ -27,6 +29,7 @@ export function CombosCatalogClient({
   builderSettings?: CustomComboSettings | null;
   banner?: PageBannerConfig | null;
 }) {
+  const router = useRouter();
   const { addComboToCart } = useCart();
   const [combos] = useState<Combo[]>(initialCombos);
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,6 +40,11 @@ export function CombosCatalogClient({
     addComboToCart(combo, 1);
     setAddedComboId(combo.id);
     setTimeout(() => setAddedComboId(null), 2500);
+  };
+
+  const handleBuyNow = (combo: Combo) => {
+    addComboToCart(combo, 1);
+    router.push("/checkout");
   };
 
   const processedCombos = useMemo(() => {
@@ -320,34 +328,43 @@ export function CombosCatalogClient({
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-2 pt-1">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleAddToCart(combo)}
+                          disabled={isAdded}
+                          className={`w-full py-2.5 px-2 text-center text-xs font-semibold uppercase tracking-wider rounded-lg transition flex items-center justify-center space-x-1 border border-duskk-900 disabled:opacity-50 ${
+                            isAdded
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : "bg-white text-duskk-900 hover:bg-duskk-50"
+                          }`}
+                        >
+                          {isAdded ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 mr-1" />
+                              <span>Added!</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingBag className="w-3.5 h-3.5 mr-1" />
+                              <span>Add To Cart</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleBuyNow(combo)}
+                          className="w-full py-2.5 px-2 text-center text-xs font-semibold uppercase tracking-wider rounded-lg transition flex items-center justify-center space-x-1 bg-duskk-900 text-white hover:bg-duskk-gold hover:text-duskk-900 shadow-sm"
+                        >
+                          <Zap className="w-3.5 h-3.5 mr-1" />
+                          <span>Buy Now</span>
+                        </button>
+                      </div>
                       <Link
                         href={`/combos/${combo.slug}`}
-                        className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-duskk-700 bg-duskk-100 hover:bg-duskk-200 rounded-lg transition"
+                        className="block w-full py-2 text-center text-xs font-semibold uppercase tracking-wider text-duskk-700 bg-duskk-100 hover:bg-duskk-200 rounded-lg transition"
                       >
-                        Details
+                        View Details
                       </Link>
-                      <button
-                        onClick={() => handleAddToCart(combo)}
-                        disabled={isAdded}
-                        className={`px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider rounded-lg transition flex items-center justify-center space-x-1 shadow-sm ${
-                          isAdded
-                            ? "bg-emerald-600 text-white"
-                            : "bg-duskk-900 text-white hover:bg-duskk-gold hover:text-duskk-900"
-                        }`}
-                      >
-                        {isAdded ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 mr-1" />
-                            <span>Added!</span>
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingBag className="w-3.5 h-3.5 mr-1" />
-                            <span>Add Set</span>
-                          </>
-                        )}
-                      </button>
                     </div>
                   </div>
                 </div>
