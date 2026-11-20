@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatPrice, normalizeImageUrl } from "@/lib/utils";
 import { CustomComboSettings, PageBannerConfig, ComboBoxDesign } from "@/types";
 import { useCart, CustomComboComponentCart } from "@/context/CartContext";
@@ -11,6 +12,7 @@ import {
   Minus,
   Trash2,
   ShoppingBag,
+  Zap,
   Sparkles,
   ShieldCheck,
   Truck,
@@ -77,6 +79,7 @@ export function BuildYourComboClient({
   initialBanner?: PageBannerConfig | null;
   initialBoxDesigns?: ComboBoxDesign[];
 }) {
+  const router = useRouter();
   const { addCustomComboToCart } = useCart();
 
   const [settings] = useState<CustomComboSettings>(initialSettings);
@@ -102,6 +105,7 @@ export function BuildYourComboClient({
   // Review Modal State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [addedNotification, setAddedNotification] = useState(false);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // Promotion date check
   const now = new Date();
@@ -353,9 +357,9 @@ export function BuildYourComboClient({
     }
   };
 
-  // Final Action: Add Custom Combo to Cart
-  const handleAddToCart = () => {
-    if (!comboCalculation.isComplete || !selectedBox) return;
+  // Helper to construct custom combo payload for cart
+  const buildCustomComboPayload = () => {
+    if (!comboCalculation.isComplete || !selectedBox) return null;
 
     const components: CustomComboComponentCart[] = selectedItems.map((item) => ({
       productId: item.productId,
@@ -369,7 +373,7 @@ export function BuildYourComboClient({
       quantity: item.quantity,
     }));
 
-    addCustomComboToCart({
+    return {
       id: `custom_combo_${Date.now()}`,
       title: `${settings.title} (${comboCalculation.totalPieces} Pieces)`,
       price: comboCalculation.finalPrice,
@@ -385,11 +389,37 @@ export function BuildYourComboClient({
         description: selectedBox.description,
       },
       components,
-    });
+    };
+  };
+
+  // Final Action: Add Custom Combo to Cart (without redirect)
+  const handleAddToCart = () => {
+    if (isProcessingAction || !comboCalculation.isComplete || !selectedBox) return;
+
+    const payload = buildCustomComboPayload();
+    if (!payload) return;
+
+    setIsProcessingAction(true);
+    addCustomComboToCart(payload);
 
     setIsReviewModalOpen(false);
     setAddedNotification(true);
+    setIsProcessingAction(false);
     setTimeout(() => setAddedNotification(false), 3000);
+  };
+
+  // Final Action: Buy Now (Add to cart and immediately redirect to checkout)
+  const handleBuyNow = () => {
+    if (isProcessingAction || !comboCalculation.isComplete || !selectedBox) return;
+
+    const payload = buildCustomComboPayload();
+    if (!payload) return;
+
+    setIsProcessingAction(true);
+    addCustomComboToCart(payload);
+
+    setIsReviewModalOpen(false);
+    router.push("/checkout");
   };
 
   // If feature is disabled by admin
@@ -1109,17 +1139,28 @@ export function BuildYourComboClient({
                 <button
                   type="button"
                   onClick={() => setIsReviewModalOpen(false)}
-                  className="w-full sm:w-1/3 py-3 border border-duskk-300 bg-white hover:bg-duskk-100 text-duskk-800 text-xs font-semibold uppercase tracking-wider rounded-lg transition"
+                  disabled={isProcessingAction}
+                  className="w-full sm:w-1/4 py-3 border border-duskk-300 bg-white hover:bg-duskk-100 text-duskk-800 text-xs font-semibold uppercase tracking-wider rounded-lg transition disabled:opacity-50"
                 >
                   Edit Selection
                 </button>
                 <button
                   type="button"
                   onClick={handleAddToCart}
-                  className="w-full sm:w-2/3 py-3 bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white text-xs font-semibold uppercase tracking-widest rounded-lg transition-all shadow-lg flex items-center justify-center space-x-2"
+                  disabled={!comboCalculation.isComplete || !selectedBox || isProcessingAction}
+                  className="w-full sm:flex-1 py-3 border border-duskk-900 bg-white hover:bg-duskk-50 text-duskk-900 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all shadow-sm flex items-center justify-center space-x-1.5 disabled:opacity-50"
                 >
                   <ShoppingBag className="w-4 h-4" />
                   <span>Add Custom Combo to Bag</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBuyNow}
+                  disabled={!comboCalculation.isComplete || !selectedBox || isProcessingAction}
+                  className="w-full sm:flex-1 py-3 bg-duskk-900 hover:bg-duskk-gold hover:text-duskk-900 text-white text-xs font-semibold uppercase tracking-widest rounded-lg transition-all shadow-lg flex items-center justify-center space-x-1.5 disabled:opacity-50"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Buy Now</span>
                 </button>
               </div>
 
