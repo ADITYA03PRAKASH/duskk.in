@@ -404,52 +404,57 @@ export default function AdminCMSPage() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div className="sm:col-span-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block font-semibold text-duskk-700">Headline / Title</label>
-                        <div className="flex items-center space-x-3 bg-duskk-50 border border-duskk-200 px-2.5 py-1 rounded">
-                          <span className="text-[11px] text-duskk-600 font-medium">Text Color:</span>
-                          <label className="inline-flex items-center space-x-1 cursor-pointer">
-                            <input
-                              type="radio"
-                              name={`headlineColor-${sec.id}`}
-                              value="light"
-                              checked={(sec.headlineColor || "light") === "light"}
-                              onChange={() => handleFieldChange(sec.id, "headlineColor", "light")}
-                              className="text-duskk-900 focus:ring-duskk-gold"
-                            />
-                            <span className="text-[11px] text-duskk-800 font-medium">Light Text</span>
-                          </label>
-                          <label className="inline-flex items-center space-x-1 cursor-pointer">
-                            <input
-                              type="radio"
-                              name={`headlineColor-${sec.id}`}
-                              value="dark"
-                              checked={sec.headlineColor === "dark"}
-                              onChange={() => handleFieldChange(sec.id, "headlineColor", "dark")}
-                              className="text-duskk-900 focus:ring-duskk-gold"
-                            />
-                            <span className="text-[11px] text-duskk-800 font-medium">Dark Text</span>
-                          </label>
+                    {/* For HERO banner: hide headline text and text-color controls per image-only redesign */}
+                    {sec.key !== "hero" && (
+                      <>
+                        <div className="sm:col-span-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block font-semibold text-duskk-700">Headline / Title</label>
+                            <div className="flex items-center space-x-3 bg-duskk-50 border border-duskk-200 px-2.5 py-1 rounded">
+                              <span className="text-[11px] text-duskk-600 font-medium">Text Color:</span>
+                              <label className="inline-flex items-center space-x-1 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`headlineColor-${sec.id}`}
+                                  value="light"
+                                  checked={(sec.headlineColor || "light") === "light"}
+                                  onChange={() => handleFieldChange(sec.id, "headlineColor", "light")}
+                                  className="text-duskk-900 focus:ring-duskk-gold"
+                                />
+                                <span className="text-[11px] text-duskk-800 font-medium">Light Text</span>
+                              </label>
+                              <label className="inline-flex items-center space-x-1 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`headlineColor-${sec.id}`}
+                                  value="dark"
+                                  checked={sec.headlineColor === "dark"}
+                                  onChange={() => handleFieldChange(sec.id, "headlineColor", "dark")}
+                                  className="text-duskk-900 focus:ring-duskk-gold"
+                                />
+                                <span className="text-[11px] text-duskk-800 font-medium">Dark Text</span>
+                              </label>
+                            </div>
+                          </div>
+                          <input
+                            type="text"
+                            value={sec.title}
+                            onChange={(e) => handleFieldChange(sec.id, "title", e.target.value)}
+                            className="w-full px-3 py-2 border border-duskk-300 rounded font-serif text-sm"
+                          />
                         </div>
-                      </div>
-                      <input
-                        type="text"
-                        value={sec.title}
-                        onChange={(e) => handleFieldChange(sec.id, "title", e.target.value)}
-                        className="w-full px-3 py-2 border border-duskk-300 rounded font-serif text-sm"
-                      />
-                    </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block font-semibold text-duskk-700 mb-1">Subtitle / Body Description</label>
-                      <textarea
-                        rows={2}
-                        value={sec.subtitle || ""}
-                        onChange={(e) => handleFieldChange(sec.id, "subtitle", e.target.value)}
-                        className="w-full px-3 py-2 border border-duskk-300 rounded"
-                      />
-                    </div>
+                        <div className="sm:col-span-2">
+                          <label className="block font-semibold text-duskk-700 mb-1">Subtitle / Body Description</label>
+                          <textarea
+                            rows={2}
+                            value={sec.subtitle || ""}
+                            onChange={(e) => handleFieldChange(sec.id, "subtitle", e.target.value)}
+                            className="w-full px-3 py-2 border border-duskk-300 rounded"
+                          />
+                        </div>
+                      </>
+                    )}
 
                     <div>
                       <label className="block font-semibold text-duskk-700 mb-1">Image URL</label>

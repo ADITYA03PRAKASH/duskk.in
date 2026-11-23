@@ -1,21 +1,16 @@
 import React from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 
 interface HeroProps {
-  title?: string;
   link?: string;
   imageUrl?: string;
   isActive?: boolean;
-  headlineColor?: "light" | "dark";
 }
 
 export function Hero({
-  title,
   link,
   imageUrl,
   isActive = true,
-  headlineColor = "light",
 }: HeroProps) {
   // If explicitly disabled in CMS, render nothing
   if (isActive === false) {
@@ -23,53 +18,34 @@ export function Hero({
   }
 
   const heroImage = imageUrl?.trim() || "";
-  const targetLink = link?.trim() || "";
-  const headline = title?.trim() || "";
-
-  // Headline color variant: light or dark
-  const headlineColorClass =
-    headlineColor === "dark" ? "text-duskk-900" : "text-white";
+  const targetLink = link?.trim() || "/shop";
 
   return (
-    <section className="relative w-full h-[200px] md:h-auto md:aspect-[3/1] flex items-end overflow-hidden bg-duskk-900">
+    <Link
+      href={targetLink}
+      aria-label="Shop All Jewellery Collection"
+      className="group relative block w-full h-[200px] md:h-auto md:aspect-[3/1] overflow-hidden bg-duskk-900 cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-duskk-gold focus-visible:ring-inset"
+    >
       {/* Background Image: 100% original CMS-uploaded image URL without transformations */}
-      {heroImage && (
+      {heroImage ? (
         <img
           src={heroImage}
-          alt={headline || "DUSKK Hero Banner"}
+          alt="DUSKK Demi-Fine Jewellery Collection"
           loading="eager"
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none"
+          className="absolute inset-0 w-full h-full object-cover object-center select-none transition-transform duration-700 ease-out group-hover:scale-[1.01]"
+        />
+      ) : (
+        <img
+          src="https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=2000"
+          alt="DUSKK Demi-Fine Jewellery Collection"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover object-center select-none transition-transform duration-700 ease-out group-hover:scale-[1.01]"
         />
       )}
-
-      {/* Content Container: Lower-left positioned */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-8 md:px-12 lg:px-16 pb-4 sm:pb-8 md:pb-12 lg:pb-16 pt-2">
-        <div className="max-w-[65%] sm:max-w-md md:max-w-lg lg:max-w-xl flex flex-col items-start space-y-2 sm:space-y-3 md:space-y-4">
-          {/* Main Headline */}
-          {headline && (
-            <h1
-              className={`font-serif text-sm sm:text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-normal tracking-tight leading-[1.12] sm:leading-tight ${headlineColorClass}`}
-            >
-              {headline}
-            </h1>
-          )}
-
-          {/* Primary CTA Button: Render only when valid link is provided */}
-          {targetLink && (
-            <div>
-              <Link
-                href={targetLink}
-                className="inline-flex items-center justify-center space-x-1 sm:space-x-1.5 md:space-x-2 px-3 py-1.5 sm:px-5 sm:py-2.5 md:px-7 md:py-3.5 bg-duskk-gold hover:bg-duskk-goldHover text-duskk-900 font-semibold text-[9px] sm:text-[11px] md:text-xs tracking-[0.18em] sm:tracking-[0.2em] uppercase rounded transition-colors duration-200 shadow-sm sm:shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-duskk-gold focus:ring-offset-1 sm:focus:ring-offset-2"
-              >
-                <span>SHOP ALL</span>
-                <ArrowRight className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 stroke-[2.25]" />
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
+    </Link>
   );
 }

@@ -51,14 +51,15 @@ export default async function HomePage() {
       <Navbar initialPromoCoupon={promoCoupon} />
 
       <main className="flex-1">
+        {/* Accessible Primary Heading for SEO and Screen Readers */}
+        <h1 className="sr-only">DUSKK — Modern Demi-Fine Jewellery Collection</h1>
+
         {/* 1. HERO SECTION — Render only if an active CMS HERO banner exists */}
         {heroBanner && (
           <Hero
-            title={heroBanner.title}
             link={heroBanner.link_url}
             imageUrl={heroBanner.image_url_desktop}
             isActive={heroBanner.is_active !== false}
-            headlineColor={heroBanner.headline_color === "dark" ? "dark" : "light"}
           />
         )}
 
