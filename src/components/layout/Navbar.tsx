@@ -302,11 +302,11 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
           <div className="flex-1 flex items-center justify-start">
             <button
               onClick={() => setIsDrawerOpen(true)}
-              className="group flex items-center space-x-2 p-1.5 -ml-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors focus:outline-none"
+              className="group flex items-center space-x-2 p-1.5 -ml-1.5 text-[#800020] hover:text-duskk-gold active:text-duskk-goldHover focus:outline-none focus-visible:text-duskk-gold transition-colors"
               aria-label="Open navigation menu"
             >
               <Menu className="w-6 h-6 stroke-[1.8] group-hover:scale-105 transition-transform" />
-              <span className="hidden sm:inline-block text-[11px] uppercase tracking-[0.22em] font-medium text-[#7A6B58] group-hover:text-duskk-gold">
+              <span className="hidden sm:inline-block text-[11px] uppercase tracking-[0.22em] font-medium text-[#800020] group-hover:text-duskk-gold group-active:text-duskk-goldHover transition-colors">
                 MENU
               </span>
             </button>
@@ -327,7 +327,7 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
                 </div>
 
                 {/* Wordmark USKK in matching Luxury Serif — Enhanced Size */}
-                <span className="font-serif text-3xl sm:text-4xl md:text-[42px] tracking-[0.25em] uppercase font-bold text-[#1F1F1F] group-hover:text-duskk-gold transition-colors leading-none pl-1 sm:pl-1.5 select-none">
+                <span className="font-serif text-3xl sm:text-4xl md:text-[42px] tracking-[0.25em] uppercase font-bold text-[#800020] group-hover:text-duskk-gold group-active:text-duskk-goldHover group-focus-visible:text-duskk-gold transition-colors leading-none pl-1 sm:pl-1.5 select-none">
                   USKK
                 </span>
               </div>
@@ -339,12 +339,12 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
             {/* Search Trigger */}
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors flex items-center space-x-1.5"
+              className="group p-1.5 text-[#800020] hover:text-duskk-gold active:text-duskk-goldHover focus:outline-none focus-visible:text-duskk-gold transition-colors flex items-center space-x-1.5"
               title="Search collection"
               aria-label="Search"
             >
               <Search className="w-5 h-5 stroke-[1.8]" />
-              <span className="hidden lg:inline-block text-[11px] uppercase tracking-[0.18em] font-medium text-[#7A6B58] hover:text-[#1F1F1F]">
+              <span className="hidden lg:inline-block text-[11px] uppercase tracking-[0.18em] font-medium text-[#800020] group-hover:text-duskk-gold group-active:text-duskk-goldHover transition-colors">
                 SEARCH
               </span>
             </button>
@@ -352,12 +352,12 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
             {/* Track Order Link */}
             <Link
               href="/order/track"
-              className="p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors hidden sm:flex items-center space-x-1.5"
+              className="group p-1.5 text-[#800020] hover:text-duskk-gold active:text-duskk-goldHover focus:outline-none focus-visible:text-duskk-gold transition-colors hidden sm:flex items-center space-x-1.5"
               title="Track your order"
               aria-label="Track order"
             >
               <Compass className="w-5 h-5 stroke-[1.8]" />
-              <span className="hidden lg:inline-block text-[11px] uppercase tracking-[0.18em] font-medium text-[#7A6B58] hover:text-[#1F1F1F]">
+              <span className="hidden lg:inline-block text-[11px] uppercase tracking-[0.18em] font-medium text-[#800020] group-hover:text-duskk-gold group-active:text-duskk-goldHover transition-colors">
                 TRACK
               </span>
             </Link>
@@ -365,7 +365,7 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
             {/* Shopping Bag Button */}
             <button
               onClick={openCart}
-              className="relative p-1.5 text-[#1F1F1F] hover:text-duskk-gold transition-colors flex items-center"
+              className="relative p-1.5 text-[#800020] hover:text-duskk-gold active:text-duskk-goldHover focus:outline-none focus-visible:text-duskk-gold transition-colors flex items-center"
               aria-label="View shopping bag"
             >
               <ShoppingBag className="w-5 h-5 stroke-[1.8]" />
@@ -466,7 +466,7 @@ export function Navbar({ initialPromoCoupon }: NavbarProps = {}) {
                       className="w-full h-full object-contain filter drop-shadow-[0_1px_2px_rgba(197,168,128,0.3)]"
                     />
                   </div>
-                  <span className="font-serif text-xl tracking-[0.25em] uppercase font-bold text-[#1F1F1F]">
+                  <span className="font-serif text-xl tracking-[0.25em] uppercase font-bold text-[#800020]">
                     USKK
                   </span>
                 </div>
