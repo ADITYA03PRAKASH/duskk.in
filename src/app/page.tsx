@@ -13,6 +13,7 @@ import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, 
 
 import { Hero } from "@/components/home/Hero";
 import { MobileCategoryNav } from "@/components/home/MobileCategoryNav";
+import { PromotionalTextBanner } from "@/components/home/PromotionalTextBanner";
 
 export const revalidate = 60; // ISR cache 60 seconds
 
@@ -67,7 +68,10 @@ export default async function HomePage() {
           />
         )}
 
-        {/* 2. FEATURED CATEGORIES — Desktop/Tablet only; on mobile, horizontal MobileCategoryNav is shown above Hero */}
+        {/* 2. PROMOTIONAL TEXT SECTION — Three-text editorial banner */}
+        <PromotionalTextBanner />
+
+        {/* 3. FEATURED CATEGORIES — Desktop/Tablet only; on mobile, horizontal MobileCategoryNav is shown above Hero */}
         <section className="hidden md:block py-20 bg-duskk-cream">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-xl mx-auto mb-14">
