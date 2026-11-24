@@ -12,6 +12,7 @@ import { ComboOffersSection } from "@/components/home/ComboOffersSection";
 import { ArrowRight, Sparkles, ShieldCheck, Truck, RefreshCw, Gem, Heart, Star, Award, ExternalLink } from "lucide-react";
 
 import { Hero } from "@/components/home/Hero";
+import { MobileCategoryNav } from "@/components/home/MobileCategoryNav";
 
 export const revalidate = 60; // ISR cache 60 seconds
 
@@ -54,6 +55,9 @@ export default async function HomePage() {
         {/* Accessible Primary Heading for SEO and Screen Readers */}
         <h1 className="sr-only">DUSKK — Modern Demi-Fine Jewellery Collection</h1>
 
+        {/* Mobile Horizontal Category Navigation — below header, above hero */}
+        <MobileCategoryNav categories={categories} />
+
         {/* 1. HERO SECTION — Render only if an active CMS HERO banner exists */}
         {heroBanner && (
           <Hero
@@ -63,8 +67,8 @@ export default async function HomePage() {
           />
         )}
 
-        {/* 2. FEATURED CATEGORIES */}
-        <section className="py-20 bg-duskk-cream">
+        {/* 2. FEATURED CATEGORIES — Desktop/Tablet only; on mobile, horizontal MobileCategoryNav is shown above Hero */}
+        <section className="hidden md:block py-20 bg-duskk-cream">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-xl mx-auto mb-14">
               <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
