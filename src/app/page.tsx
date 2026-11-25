@@ -78,7 +78,7 @@ export default async function HomePage() {
               <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
                 CURATED ATELIER
               </span>
-              <h2 className="font-serif text-3xl sm:text-4xl text-duskk-900 font-medium">
+              <h2 className="font-serif text-3xl sm:text-4xl text-[#800020] font-medium">
                 Shop By Category
               </h2>
               <div className="w-12 h-0.5 bg-duskk-gold mx-auto mt-4" />
@@ -136,7 +136,7 @@ export default async function HomePage() {
                 <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
                   FRESH AT THE VAULT
                 </span>
-                <h2 className="font-serif text-3xl sm:text-4xl text-duskk-900 font-medium">
+                <h2 className="font-serif text-3xl sm:text-4xl text-[#800020] font-medium">
                   New Arrivals
                 </h2>
               </div>
@@ -204,7 +204,7 @@ export default async function HomePage() {
                 <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
                   MOST-LOVED DESIGNS
                 </span>
-                <h2 className="font-serif text-3xl sm:text-4xl text-duskk-900 font-medium">
+                <h2 className="font-serif text-3xl sm:text-4xl text-[#800020] font-medium">
                   Best Sellers
                 </h2>
               </div>
@@ -247,10 +247,10 @@ export default async function HomePage() {
                 <span className="text-[11px] uppercase font-mono tracking-[0.25em] text-duskk-gold block font-semibold">
                   THE DUSKK STORY
                 </span>
-                <h2 className="font-serif text-2xl sm:text-3xl text-duskk-900 font-light leading-snug">
+                <h2 className="font-serif text-2xl sm:text-3xl text-[#800020] font-light leading-snug">
                   Crafted For The Modern Muse
                 </h2>
-                <div className="space-y-2.5 text-xs sm:text-[13px] text-duskk-600 leading-relaxed">
+                <div className="space-y-2.5 text-xs sm:text-[13px] text-[#0F0F0F] leading-relaxed">
                   <p>
                     DUSKK was founded in New Delhi with a clear conviction: creating refined demi-fine jewellery for everyday wear without unnecessary luxury markups. We handcraft pieces using hypoallergenic 925 sterling silver and medical-grade stainless steel finished in radiant gold plating.
                   </p>
@@ -279,7 +279,7 @@ export default async function HomePage() {
               <span className="text-xs uppercase font-mono tracking-[0.25em] text-duskk-gold block mb-2">
                 UNCOMPROMISING QUALITY
               </span>
-              <h2 className="font-serif text-3xl sm:text-4xl text-duskk-900 font-medium">
+              <h2 className="font-serif text-3xl sm:text-4xl text-[#800020] font-medium">
                 The DUSKK Standard
               </h2>
             </div>
@@ -289,8 +289,8 @@ export default async function HomePage() {
                 <div className="w-12 h-12 bg-duskk-cream text-duskk-gold rounded-full flex items-center justify-center mx-auto">
                   <Sparkles className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-lg font-semibold text-duskk-900">Demi-Fine Gold</h3>
-                <p className="text-xs text-duskk-600 leading-relaxed">
+                <h3 className="font-serif text-lg font-semibold text-[#800020]">Demi-Fine Gold</h3>
+                <p className="text-xs text-[#0F0F0F] leading-relaxed">
                   Substantially thicker gold plating that outlasts ordinary costume jewellery and retains its warm golden sheen.
                 </p>
               </div>
@@ -299,8 +299,8 @@ export default async function HomePage() {
                 <div className="w-12 h-12 bg-duskk-cream text-duskk-gold rounded-full flex items-center justify-center mx-auto">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-lg font-semibold text-duskk-900">Hypoallergenic</h3>
-                <p className="text-xs text-duskk-600 leading-relaxed">
+                <h3 className="font-serif text-lg font-semibold text-[#800020]">Hypoallergenic</h3>
+                <p className="text-xs text-[#0F0F0F] leading-relaxed">
                   100% Nickel-free, Lead-free, and Cadmium-free. Safe for sensitive ears and delicate skin.
                 </p>
               </div>
@@ -309,8 +309,8 @@ export default async function HomePage() {
                 <div className="w-12 h-12 bg-duskk-cream text-duskk-gold rounded-full flex items-center justify-center mx-auto">
                   <Truck className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-lg font-semibold text-duskk-900">Insured Delivery</h3>
-                <p className="text-xs text-duskk-600 leading-relaxed">
+                <h3 className="font-serif text-lg font-semibold text-[#800020]">Insured Delivery</h3>
+                <p className="text-xs text-[#0F0F0F] leading-relaxed">
                   Fast delivery across 26,000+ Indian pincodes in our signature tamper-proof velvet unboxing.
                 </p>
               </div>
@@ -319,8 +319,8 @@ export default async function HomePage() {
                 <div className="w-12 h-12 bg-duskk-cream text-duskk-gold rounded-full flex items-center justify-center mx-auto">
                   <RefreshCw className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-lg font-semibold text-duskk-900">7-Day Easy Returns</h3>
-                <p className="text-xs text-duskk-600 leading-relaxed">
+                <h3 className="font-serif text-lg font-semibold text-[#800020]">7-Day Easy Returns</h3>
+                <p className="text-xs text-[#0F0F0F] leading-relaxed">
                   Shop with complete peace of mind. Instant return scheduling with doorstep pickup.
                 </p>
               </div>
